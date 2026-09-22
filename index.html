@@ -126,7 +126,6 @@
       padding: 16px;
       border-radius: 8px;
       background-color: #0f172a;
-      border-left: 4px solid var(--accent);
       display: none;
     }
 
@@ -174,7 +173,7 @@
 
     <!-- Navigation für Module -->
     <div class="nav-tabs">
-      <button class="tab-btn active" onclick="switchTab(event, 'bremse')">Festhaltebremse</button>
+      <button class="tab-btn active" onclick="switchTab(event, 'bremse')">Festhaltekraft</button>
       <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
     </div>
 
@@ -186,8 +185,8 @@
       </div>
 
       <div class="form-group">
-        <label for="neigung">Maßgebende Neigung (in ‰) – Mindestwert 2,5 ‰:</label>
-        <input type="number" id="neigung" placeholder="z. B. 12" oninput="berechneBremse()">
+        <label for="neigung">Maßgebende Neigung (in ‰)</label>
+        <input type="number" id="neigung" placeholder="2,5" oninput="berechneBremse()">
       </div>
 
       <div id="result-bremse" class="result-box">
@@ -207,21 +206,21 @@
     <!-- Modul 2: Zeitdifferenz -->
     <div id="tab-zeit" class="tab-content">
       <div class="form-group">
-        <label>Sollzeit:</label>
+        <label>Soll-Zeit:</label>
         <div class="time-inputs">
           <input type="time" id="time1" onchange="berechneZeit()">
         </div>
       </div>
 
       <div class="form-group">
-        <label>Istzeit:</label>
+        <label>Ist-Zeit:</label>
         <div class="time-inputs">
           <input type="time" id="time2" onchange="berechneZeit()">
         </div>
       </div>
 
       <div id="result-zeit" class="result-box">
-        <div class="result-title">Zeitabweichung / Dauer</div>
+        <div class="result-title">Zeitabweichung</div>
         <div id="zeit-wert" class="result-value">-</div>
       </div>
     </div>
@@ -245,6 +244,14 @@
         event.target.classList.add('active');
       }
     }
+
+    // Ist-Zeit beim Laden mit aktueller Uhrzeit vorbelegen
+    window.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('time2').value = `${hh}:${mm}`;
+    });
 
     // Rechner 1: Festhaltebremse
     function berechneBremse() {
@@ -290,26 +297,38 @@
       const [h1, m1] = t1.split(':').map(Number);
       const [h2, m2] = t2.split(':').map(Number);
 
-      let d1 = new Date(2000, 0, 1, h1, m1);
-      let d2 = new Date(2000, 0, 1, h2, m2);
+      // Differenz am selben Tag (kann negativ sein = früher)
+      const diffSameDay = (h2 * 60 + m2) - (h1 * 60 + m1);
 
-      // Falls Mitternacht überschritten wird
-      if (d2 < d1) {
-        d2.setDate(d2.getDate() + 1);
-      }
-
-      const diffMin = Math.round((d2 - d1) / 60000);
-      const std = Math.floor(diffMin / 60);
-      const min = diffMin % 60;
-
-      let Text = "";
-      if (std > 0) {
-        Text = `${std} Std. ${min} Min.`;
+      // Liegt die Ist-Zeit mehr als 12 Std. "vor" der Soll-Zeit, gehen wir davon
+      // aus, dass Mitternacht überschritten wurde (echte Verspätung), statt
+      // einer unrealistisch frühen Ankunft.
+      let delayMin;
+      if (diffSameDay < -720) {
+        delayMin = diffSameDay + 1440;
       } else {
-        Text = `${min} Minuten`;
+        delayMin = diffSameDay;
       }
 
-      resultVal.innerText = Text;
+      const std = Math.floor(Math.abs(delayMin) / 60);
+      const min = Math.abs(delayMin) % 60;
+
+      let nebenzeile = std > 0 ? `${std} Std. ${min} Min.` : `${min} Min.`;
+      let hauptwert, farbe;
+
+      if (delayMin > 0) {
+        hauptwert = `+${delayMin} Min.`;
+        farbe = "#ef4444"; // rot
+      } else if (delayMin < 0) {
+        hauptwert = `${delayMin} Min.`;
+        farbe = "#22c55e"; // grün
+      } else {
+        hauptwert = `0 Min.`;
+        farbe = "#22c55e"; // grün
+      }
+
+      resultVal.innerHTML = `${hauptwert} <span style="font-size:0.9rem; font-weight:normal; color:#94a3b8;">(${nebenzeile})</span>`;
+      resultVal.style.color = farbe;
       resultBox.classList.add('visible');
     }
 
