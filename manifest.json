@@ -1,7 +1,7 @@
 {
   "name": "Tf-Assistent",
   "short_name": "Tf-Assistent",
-  "start_url": "./tf-assistent.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
