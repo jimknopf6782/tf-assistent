@@ -926,34 +926,12 @@
     }
 
     // Service Worker Logik für Offline-Funktionalität & Auto-Updates
-    // Strategie: Network-first — bei bestehender Internetverbindung wird
-    // immer die aktuelle Version geladen und der Cache aktualisiert.
-    // Nur ohne Verbindung greift der zuletzt gespeicherte Stand.
+    // Wird als eigene Datei (sw.js) registriert, nicht als Blob-URL —
+    // eine Blob-URL existiert nur innerhalb der aktuellen Seiten-Session
+    // und ist beim erneuten Öffnen der installierten App nicht mehr
+    // erreichbar, was zu Ladefehlern führen kann.
     if ('serviceWorker' in navigator) {
-      const swCode = `
-        const CACHE_NAME = 'tf-app-cache';
-        self.addEventListener('install', e => {
-          self.skipWaiting();
-        });
-        self.addEventListener('activate', e => {
-          e.waitUntil(self.clients.claim());
-        });
-        self.addEventListener('fetch', e => {
-          e.respondWith(
-            fetch(e.request)
-              .then(res => {
-                const resClone = res.clone();
-                caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
-                return res;
-              })
-              .catch(() => caches.match(e.request))
-          );
-        });
-      `;
-      const blob = new Blob([swCode], { type: 'application/javascript' });
-      const blobURL = URL.createObjectURL(blob);
-
-      navigator.serviceWorker.register(blobURL).then(() => {
+      navigator.serviceWorker.register('sw.js').then(() => {
         console.log('Offline-Service Worker ist aktiv (Network-first).');
       }).catch(err => console.log('SW Fehler:', err));
     }
