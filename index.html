@@ -20,6 +20,8 @@
       --bg: #0f172a;
       --card-bg: #1e293b;
       --accent: #dc2626;
+      --accent-hover: #b91c1c;
+      --danger: #ef4444;
       --text: #f8fafc;
       --text-muted: #cbd5e1;
       --border: #334155;
@@ -31,6 +33,8 @@
         --bg: #f1f5f9;
         --card-bg: #ffffff;
         --accent: #dc2626;
+        --accent-hover: #b91c1c;
+        --danger: #ef4444;
         --text: #0f172a;
         --text-muted: #475569;
         --border: #e2e8f0;
@@ -70,19 +74,81 @@
     }
 
     /* Menü-Navigation (Tabs) */
+    .nav-tabs-wrapper {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .nav-tabs-wrapper::after {
+      content: "›";
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 6px;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: linear-gradient(to right, transparent, var(--card-bg) 55%);
+      border-radius: 0 12px 12px 0;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.2s ease;
+    }
+
+    .nav-tabs-wrapper.at-end::after {
+      opacity: 0;
+    }
+
+    .nav-tabs-wrapper::before {
+      content: "‹";
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding-left: 6px;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: linear-gradient(to left, transparent, var(--card-bg) 55%);
+      border-radius: 12px 0 0 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .nav-tabs-wrapper.scrolled-left::before {
+      opacity: 1;
+    }
+
     .nav-tabs {
       display: flex;
       gap: 8px;
-      margin-bottom: 20px;
       background-color: var(--card-bg);
       padding: 6px;
       border-radius: 12px;
       border: 1px solid var(--border);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+      display: none;
     }
 
     .tab-btn {
-      flex: 1;
-      padding: 12px;
+      flex: 0 0 auto;
+      white-space: nowrap;
+      padding: 12px 16px;
       border: none;
       background: transparent;
       color: var(--text-muted);
@@ -179,6 +245,186 @@
     button.calc-btn:active {
       opacity: 0.9;
     }
+
+    /* Modul 3: Bremsberechnung (Ril 408) */
+    /* Modul 3: Bremsberechnung (Ril 408 / BRW-EVU) */
+    .rule-switcher {
+      display: flex;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      margin-top: 12px;
+    }
+
+    .rule-btn {
+      flex: 1;
+      padding: 7px 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .rule-btn.active {
+      background: rgba(220, 38, 38, 0.12);
+      color: var(--accent);
+    }
+
+    .section-card {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--accent);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .lok-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .lok-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .lok-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .btn-remove {
+      background: transparent;
+      border: none;
+      color: var(--danger);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .gpr-toggle {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .gpr-btn {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 0;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .gpr-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+
+    .btn-add {
+      width: 100%;
+      background: transparent;
+      border: 1px dashed var(--accent);
+      color: var(--accent);
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .btn-add:disabled {
+      border-color: var(--border);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    .result-card {
+      background: var(--input-bg);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      display: none;
+    }
+
+    .result-card.visible {
+      display: block;
+    }
+
+    .result-main {
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1.1;
+      margin: 8px 0;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .result-item {
+      font-size: 0.8rem;
+    }
+
+    .result-item span {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .result-item strong {
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .badge-info {
+      display: inline-block;
+      background: rgba(220, 38, 38, 0.15);
+      color: var(--accent);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -189,13 +435,16 @@
     </header>
 
     <!-- Navigation für Module -->
-    <div class="nav-tabs">
-      <button class="tab-btn active" onclick="switchTab(event, 'bremse')">Festhaltekraft</button>
-      <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
+    <div class="nav-tabs-wrapper">
+      <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab(event, 'brems408')">Bremsberechnung</button>
+        <button class="tab-btn" onclick="switchTab(event, 'bremse')">Festhaltekraft</button>
+        <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
+      </div>
     </div>
 
     <!-- Modul 1: Festhaltebremse -->
-    <div id="tab-bremse" class="tab-content active">
+    <div id="tab-bremse" class="tab-content">
       <div class="form-group">
         <label for="zuggewicht">Zuggewicht (in Tonnen):</label>
         <input type="number" id="zuggewicht" placeholder="z. B. 1200" oninput="berechneBremse()">
@@ -241,6 +490,76 @@
         <div id="zeit-wert" class="result-value">-</div>
       </div>
     </div>
+
+    <!-- Modul 3: Bremsberechnung (Ril 408) -->
+    <div id="tab-brems408" class="tab-content active">
+      <div class="section-card">
+        <div class="section-title">
+          <span>1. Triebfahrzeuge</span>
+          <span id="b408-lok-count" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">1 / 3</span>
+        </div>
+
+        <div id="b408-lok-container"></div>
+
+        <button id="b408-btn-add-lok" class="btn-add" onclick="b408AddLok()">+ Weitere Lok hinzufügen</button>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title"><span>2. Wagenzugdaten</span></div>
+
+        <div class="form-group">
+          <label for="b408-wagen-gewicht">Wagenzuggewicht (t)</label>
+          <input type="number" id="b408-wagen-gewicht" placeholder="z. B. 950" inputmode="numeric" oninput="b408AutoCheckMass()">
+        </div>
+
+        <div class="form-group">
+          <label for="b408-wagen-laenge">Wagenzuglänge (m)</label>
+          <input type="number" id="b408-wagen-laenge" placeholder="z. B. 520" inputmode="decimal">
+        </div>
+
+        <div class="form-group">
+          <label for="b408-wagen-p">Bremsgewicht Wagenzug P (t)</label>
+          <input type="number" id="b408-wagen-p" placeholder="z. B. 820" inputmode="numeric">
+        </div>
+
+        <div class="form-group">
+          <label for="b408-wagen-g">Bremsgewicht Wagenzug G (t)</label>
+          <input type="number" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric">
+        </div>
+
+        <div class="rule-switcher">
+          <button id="b408-rule-ril" class="rule-btn active" onclick="b408SetRuleMode('RIL')">Ril 408</button>
+          <button id="b408-rule-evu" class="rule-btn" onclick="b408SetRuleMode('EVU')">BRW-EVU</button>
+        </div>
+      </div>
+
+      <button class="calc-btn" onclick="b408CalculateBrakes()">BREMSEN BERECHNEN</button>
+
+      <div id="b408-result-card" class="result-card">
+        <div class="result-title">Vorhandene Bremsprozente</div>
+        <div id="b408-res-prozent" class="result-main">0 %</div>
+        <div id="b408-res-mode-badge" class="badge-info">P/R-Zug</div>
+
+        <div class="result-grid">
+          <div class="result-item">
+            <span>Gesamtzugmasse</span>
+            <strong id="b408-res-masse">0 t</strong>
+          </div>
+          <div class="result-item">
+            <span>Wirksames Bremsgewicht</span>
+            <strong id="b408-res-bremsgewicht">0 t</strong>
+          </div>
+          <div class="result-item">
+            <span>Gesamtzuglänge</span>
+            <strong id="b408-res-laenge">0 m</strong>
+          </div>
+          <div class="result-item">
+            <span>Längenabzug</span>
+            <strong id="b408-res-abzug">0 %</strong>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <footer style="text-align: center; margin-top: 20px; font-size: 0.75rem; color: var(--text-muted);">
@@ -259,6 +578,9 @@
       } else if (tabName === 'zeit') {
         document.getElementById('tab-zeit').classList.add('active');
         event.target.classList.add('active');
+      } else if (tabName === 'brems408') {
+        document.getElementById('tab-brems408').classList.add('active');
+        event.target.classList.add('active');
       }
     }
 
@@ -268,6 +590,30 @@
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
       document.getElementById('time2').value = `${hh}:${mm}`;
+
+      // Bremsberechnung: erste Lok anlegen
+      b408AddLok();
+
+      // Gespeicherten Regel-Modus (Ril 408 / BRW-EVU) wiederherstellen
+      try {
+        const savedMode = localStorage.getItem("brems_rule_mode");
+        if (savedMode) b408SetRuleMode(savedMode);
+      } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+
+      // Scroll-Pfeile bei den Tabs: nur zeigen, wenn in die jeweilige
+      // Richtung noch etwas zu sehen ist.
+      const navTabs = document.querySelector('.nav-tabs');
+      const navTabsWrapper = document.querySelector('.nav-tabs-wrapper');
+
+      function updateTabScrollHints() {
+        const maxScroll = navTabs.scrollWidth - navTabs.clientWidth;
+        navTabsWrapper.classList.toggle('scrolled-left', navTabs.scrollLeft > 4);
+        navTabsWrapper.classList.toggle('at-end', navTabs.scrollLeft >= maxScroll - 4);
+      }
+
+      navTabs.addEventListener('scroll', updateTabScrollHints);
+      window.addEventListener('resize', updateTabScrollHints);
+      updateTabScrollHints();
     });
 
     // Rechner 1: Festhaltebremse
@@ -347,6 +693,214 @@
       resultVal.innerHTML = `${hauptwert} <span style="font-size:0.9rem; font-weight:normal; color:#94a3b8;">(${nebenzeile})</span>`;
       resultVal.style.color = farbe;
       resultBox.classList.add('visible');
+    }
+
+    // ===== Modul 3: Bremsberechnung (Ril 408) =====
+    const B408_LOK_DB = {
+      "193": { name: "BR 193 (Vectron)", mass: 90, luep: 19, g: 72, p: 95, r: 135 },
+      "183": { name: "BR 183 (Taurus 3)", mass: 87, luep: 20, g: 80, p: 95, r: 140 },
+      "182": { name: "BR 182 (Taurus 1/2)", mass: 86, luep: 20, g: 67, p: 88, r: 130 },
+      "189": { name: "BR 189 (EuroSprinter)", mass: 87, luep: 20, g: 79, p: 99, r: 138 },
+      "187": { name: "BR 187 (Traxx 3)", mass: 84, luep: 19, g: 78, p: 95, r: 140 },
+      "186": { name: "BR 186 (Traxx 2E)", mass: 84, luep: 19, g: 73, p: 90, r: 140 },
+      "185": { name: "BR 185 (Traxx 1/2)", mass: 84, luep: 19, g: 77, p: 95, r: 140 }
+    };
+
+    let b408Loks = [];
+    let b408CurrentRuleMode = "RIL"; // RIL oder EVU
+
+    function b408SetRuleMode(mode) {
+      b408CurrentRuleMode = mode;
+      try {
+        localStorage.setItem("brems_rule_mode", mode);
+      } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+
+      document.getElementById("b408-rule-ril").classList.toggle("active", mode === "RIL");
+      document.getElementById("b408-rule-evu").classList.toggle("active", mode === "EVU");
+    }
+
+    function b408AddLok() {
+      if (b408Loks.length >= 3) return;
+      const id = Date.now();
+      b408Loks.push({ id: id, type: "193", pos: "G" });
+      b408RenderLoks();
+      b408AutoCheckMass();
+    }
+
+    function b408RemoveLok(id) {
+      if (b408Loks.length <= 1) return;
+      b408Loks = b408Loks.filter(l => l.id !== id);
+      b408RenderLoks();
+      b408AutoCheckMass();
+    }
+
+    function b408SetLokType(id, type) {
+      const lok = b408Loks.find(l => l.id === id);
+      if (lok) lok.type = type;
+      b408AutoCheckMass();
+    }
+
+    function b408SetLokPos(id, pos) {
+      const lok = b408Loks.find(l => l.id === id);
+      if (lok) {
+        lok.pos = pos;
+        b408RenderLoks();
+      }
+    }
+
+    function b408RenderLoks() {
+      const container = document.getElementById("b408-lok-container");
+      container.innerHTML = "";
+
+      b408Loks.forEach((lok, index) => {
+        const lokElement = document.createElement("div");
+        lokElement.className = "lok-item";
+        lokElement.innerHTML = `
+          <div class="lok-header">
+            <span>LOK ${index + 1}</span>
+            ${b408Loks.length > 1 ? `<button class="btn-remove" onclick="b408RemoveLok(${lok.id})">&times;</button>` : ''}
+          </div>
+          <div class="form-group">
+            <label>Baureihe</label>
+            <select onchange="b408SetLokType(${lok.id}, this.value)">
+              ${Object.keys(B408_LOK_DB).map(key => `
+                <option value="${key}" ${lok.type === key ? 'selected' : ''}>
+                  ${B408_LOK_DB[key].name}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Bremsstellung</label>
+            <div class="gpr-toggle">
+              <div class="gpr-btn ${lok.pos === 'G' ? 'active' : ''}" onclick="b408SetLokPos(${lok.id}, 'G')">G</div>
+              <div class="gpr-btn ${lok.pos === 'P' ? 'active' : ''}" onclick="b408SetLokPos(${lok.id}, 'P')">P</div>
+              <div class="gpr-btn ${lok.pos === 'R' ? 'active' : ''}" onclick="b408SetLokPos(${lok.id}, 'R')">R</div>
+            </div>
+          </div>
+        `;
+        container.appendChild(lokElement);
+      });
+
+      document.getElementById("b408-lok-count").innerText = `${b408Loks.length} / 3`;
+      document.getElementById("b408-btn-add-lok").disabled = (b408Loks.length >= 3);
+    }
+
+    // Automatische Anpassung je nach Zugmasse (> 800 t -> G, sonst -> P).
+    // Keine Sperre: der Nutzer kann danach jederzeit manuell auf G/P/R wechseln,
+    // die Automatik greift nur erneut, wenn sich das Zuggewicht ändert.
+    function b408AutoCheckMass() {
+      const wagenMasse = parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0;
+      let lokMasse = 0;
+      b408Loks.forEach(l => lokMasse += B408_LOK_DB[l.type].mass);
+
+      const gesamtMasse = wagenMasse + lokMasse;
+      const zielPos = gesamtMasse > 800 ? "G" : "P";
+
+      b408Loks.forEach(l => {
+        l.pos = zielPos;
+      });
+      b408RenderLoks();
+    }
+
+    function b408CalculateBrakes() {
+      const wagenGewicht = Math.floor(parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0);
+      const wagenLaengeInput = parseFloat(document.getElementById("b408-wagen-laenge").value) || 0;
+      const wagenP = Math.floor(parseFloat(document.getElementById("b408-wagen-p").value) || 0);
+      const wagenG = Math.floor(parseFloat(document.getElementById("b408-wagen-g").value) || 0);
+
+      // Grundsatz: Längen nach OBEN runden
+      const wagenLaenge = Math.ceil(wagenLaengeInput);
+
+      let lokGewichtGesamt = 0;
+      let lokLuepGesamt = 0;
+      let lokBremsP_R = 0;
+      let lokBremsG_Raw = 0;
+      let allLoksInG = true;
+
+      b408Loks.forEach(l => {
+        const data = B408_LOK_DB[l.type];
+        lokGewichtGesamt += data.mass;
+        lokLuepGesamt += data.luep;
+
+        if (l.pos === "G") {
+          lokBremsG_Raw += data.g;
+        } else {
+          allLoksInG = false;
+          if (l.pos === "P") lokBremsP_R += data.p;
+          if (l.pos === "R") lokBremsP_R += data.r;
+        }
+      });
+
+      const gesamtMasse = wagenGewicht + lokGewichtGesamt;
+      const gesamtLaenge = wagenLaenge + lokLuepGesamt;
+
+      if (gesamtMasse === 0) {
+        alert("Bitte gib ein gültiges Wagenzuggewicht ein.");
+        return;
+      }
+
+      if (wagenLaengeInput === 0) {
+        alert("Bitte gib die Wagenzuglänge ein. Ohne sie kann der Längenabzug nicht korrekt berechnet werden.");
+        return;
+      }
+
+      const isReinerGZug = (wagenP === 0 && wagenG > 0 && allLoksInG);
+
+      let laengenAbzugProzent = 0;
+      let wirksamesBremsgewicht = 0;
+      let modeText = "";
+
+      if (isReinerGZug) {
+        wirksamesBremsgewicht = wagenG + lokBremsG_Raw;
+        modeText = "Durchgehend G (Keine Abzüge)";
+        laengenAbzugProzent = 0;
+      } else {
+        // Längenabzug ermitteln (Gilt NUR auf P-Bremsgewichte), je nach Regel-Modus
+        if (gesamtLaenge >= 500) {
+          if (b408CurrentRuleMode === "RIL") {
+            // Ril 408 Staffelung
+            if (gesamtLaenge >= 700) laengenAbzugProzent = 19;
+            else if (gesamtLaenge >= 600) laengenAbzugProzent = 10;
+            else laengenAbzugProzent = 5;
+          } else {
+            // BRW-EVU Regel: +1% je volle 20 m, max. 9%
+            const schritte20m = Math.floor((gesamtLaenge - 500) / 20);
+            laengenAbzugProzent = Math.min(9, schritte20m + 1);
+          }
+        }
+
+        const laengenFaktor = (100 - laengenAbzugProzent) / 100;
+
+        const pBremsUnabgezogen = wagenP + lokBremsP_R;
+        const pBremsEffektiv = Math.floor(pBremsUnabgezogen * laengenFaktor);
+
+        const wagenGEffektiv = Math.floor(wagenG * 0.75);
+        const lokGEffektiv = Math.floor(lokBremsG_Raw * 0.75);
+        const gBremsEffektiv = wagenGEffektiv + lokGEffektiv;
+
+        wirksamesBremsgewicht = pBremsEffektiv + gBremsEffektiv;
+
+        const ruleTag = (b408CurrentRuleMode === "EVU") ? " BRW-EVU" : "";
+        if (wagenG > 0 || lokBremsG_Raw > 0) {
+          modeText = `Mischstellung${ruleTag} (G mit -25% Abzug)`;
+        } else {
+          modeText = `Reiner P/R-Zug${ruleTag}`;
+        }
+      }
+
+      const bremsProzent = Math.floor((wirksamesBremsgewicht / gesamtMasse) * 100);
+
+      document.getElementById("b408-res-prozent").innerText = `${bremsProzent} %`;
+      document.getElementById("b408-res-mode-badge").innerText = modeText;
+      document.getElementById("b408-res-masse").innerText = `${gesamtMasse} t`;
+      document.getElementById("b408-res-bremsgewicht").innerText = `${wirksamesBremsgewicht} t`;
+      document.getElementById("b408-res-laenge").innerText = `${gesamtLaenge} m`;
+      document.getElementById("b408-res-abzug").innerText = `${laengenAbzugProzent} %`;
+
+      const resultCard = document.getElementById("b408-result-card");
+      resultCard.classList.add("visible");
+      resultCard.scrollIntoView({ behavior: 'smooth' });
     }
 
     // Service Worker Logik für Offline-Funktionalität & Auto-Updates
