@@ -6,7 +6,8 @@
   <title>Tf-Assistent</title>
   
   <!-- Einstellungen für Web-App / PWA -->
-  <meta name="theme-color" content="#1e293b">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tf-Assistent">
@@ -15,10 +16,23 @@
     :root {
       --bg: #0f172a;
       --card-bg: #1e293b;
-      --accent: #2563eb;
+      --accent: #dc2626;
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --border: #334155;
+      --input-bg: #0f172a;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f1f5f9;
+        --card-bg: #ffffff;
+        --accent: #dc2626;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --input-bg: #f8fafc;
+      }
     }
 
     * {
@@ -49,7 +63,7 @@
 
     h1 {
       font-size: 1.5rem;
-      color: #38bdf8;
+      color: var(--accent);
     }
 
     /* Menü-Navigation (Tabs) */
@@ -110,8 +124,8 @@
       padding: 12px;
       border-radius: 8px;
       border: 1px solid var(--border);
-      background-color: #0f172a;
-      color: #fff;
+      background-color: var(--input-bg);
+      color: var(--text);
       font-size: 1rem;
     }
 
@@ -125,7 +139,7 @@
       margin-top: 20px;
       padding: 16px;
       border-radius: 8px;
-      background-color: #0f172a;
+      background-color: var(--input-bg);
       display: none;
     }
 
@@ -143,7 +157,7 @@
     .result-value {
       font-size: 1.4rem;
       font-weight: bold;
-      color: #38bdf8;
+      color: var(--accent);
     }
 
     button.calc-btn {
