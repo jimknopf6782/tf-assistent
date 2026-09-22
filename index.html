@@ -722,7 +722,13 @@
     function b408AddLok() {
       if (b408Loks.length >= 3) return;
       const id = Date.now();
-      b408Loks.push({ id: id, type: "193", pos: "G" });
+      const defaultType = "193";
+      b408Loks.push({
+        id: id,
+        type: defaultType,
+        mass: B408_LOK_DB[defaultType].mass,
+        pos: "G"
+      });
       b408RenderLoks();
       b408AutoCheckMass();
     }
@@ -736,8 +742,20 @@
 
     function b408SetLokType(id, type) {
       const lok = b408Loks.find(l => l.id === id);
-      if (lok) lok.type = type;
-      b408AutoCheckMass();
+      if (lok) {
+        lok.type = type;
+        lok.mass = B408_LOK_DB[type].mass; // Standardgewicht bei Typwechsel übernehmen
+        b408RenderLoks();
+        b408AutoCheckMass();
+      }
+    }
+
+    function b408SetLokMass(id, massValue) {
+      const lok = b408Loks.find(l => l.id === id);
+      if (lok) {
+        lok.mass = parseFloat(massValue) || 0;
+        b408AutoCheckMass();
+      }
     }
 
     function b408SetLokPos(id, pos) {
@@ -771,6 +789,10 @@
             </select>
           </div>
           <div class="form-group">
+            <label>Lokgewicht (t)</label>
+            <input type="number" value="${lok.mass}" inputmode="numeric" onchange="b408SetLokMass(${lok.id}, this.value)" oninput="b408SetLokMass(${lok.id}, this.value)">
+          </div>
+          <div class="form-group">
             <label>Bremsstellung</label>
             <div class="gpr-toggle">
               <div class="gpr-btn ${lok.pos === 'G' ? 'active' : ''}" onclick="b408SetLokPos(${lok.id}, 'G')">G</div>
@@ -792,7 +814,7 @@
     function b408AutoCheckMass() {
       const wagenMasse = parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0;
       let lokMasse = 0;
-      b408Loks.forEach(l => lokMasse += B408_LOK_DB[l.type].mass);
+      b408Loks.forEach(l => lokMasse += (parseFloat(l.mass) || 0));
 
       const gesamtMasse = wagenMasse + lokMasse;
       const zielPos = gesamtMasse > 800 ? "G" : "P";
@@ -820,7 +842,7 @@
 
       b408Loks.forEach(l => {
         const data = B408_LOK_DB[l.type];
-        lokGewichtGesamt += data.mass;
+        lokGewichtGesamt += (parseFloat(l.mass) || 0);
         lokLuepGesamt += data.luep;
 
         if (l.pos === "G") {
