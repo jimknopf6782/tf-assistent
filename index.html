@@ -1013,16 +1013,14 @@
       document.getElementById("b408-btn-add-lok").disabled = (b408Loks.length >= 3);
     }
 
-    // Automatische Anpassung je nach Zugmasse (> 800 t -> G, sonst -> P).
+    // Automatische Anpassung je nach Wagenzuggewicht (> 800 t -> G, sonst -> P).
+    // Wichtig: bezieht sich nur auf das Wagenzuggewicht, NICHT auf die Gesamtmasse
+    // inkl. Lok — sonst würde die Lok selbst die Schwelle mit nach oben ziehen.
     // Keine Sperre: der Nutzer kann danach jederzeit manuell auf G/P/R wechseln,
     // die Automatik greift nur erneut, wenn sich das Zuggewicht ändert.
     function b408AutoCheckMass() {
       const wagenMasse = parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0;
-      let lokMasse = 0;
-      b408Loks.forEach(l => lokMasse += (parseFloat(l.mass) || 0));
-
-      const gesamtMasse = wagenMasse + lokMasse;
-      const zielPos = gesamtMasse > 800 ? "G" : "P";
+      const zielPos = wagenMasse > 800 ? "G" : "P";
 
       b408Loks.forEach(l => {
         l.pos = zielPos;
