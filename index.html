@@ -428,65 +428,6 @@
     }
 
     /* Modul 4: Betriebsstellen-Suche (Ril 100) */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 46px;
-      height: 26px;
-      flex-shrink: 0;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .switch-slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: var(--input-bg);
-      border: 1px solid var(--border);
-      transition: 0.2s;
-      border-radius: 26px;
-    }
-
-    .switch-slider::before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      bottom: 3px;
-      background-color: var(--text-muted);
-      transition: 0.2s;
-      border-radius: 50%;
-    }
-
-    .switch input:checked + .switch-slider {
-      background-color: var(--accent);
-      border-color: var(--accent);
-    }
-
-    .switch input:checked + .switch-slider::before {
-      transform: translateX(20px);
-      background-color: #ffffff;
-    }
-
-    .bst-toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-      gap: 10px;
-    }
-
-    .bst-toggle-row label {
-      margin: 0;
-      font-size: 0.85rem;
-    }
-
     .bst-status-line {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -521,6 +462,14 @@
       background: var(--card-bg);
       padding: 2px 8px;
       border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .bst-land {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-right: 4px;
       white-space: nowrap;
     }
 
@@ -698,18 +647,10 @@
         <input type="text" id="bst-search" placeholder="z. B. AA oder Altona" oninput="bstSearch()" autocomplete="off">
       </div>
 
-      <div class="bst-toggle-row">
-        <label for="bst-show-all">Auch stillgelegte / geplante anzeigen</label>
-        <label class="switch">
-          <input type="checkbox" id="bst-show-all" onchange="bstSearch()">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-
       <div id="bst-status" class="bst-status-line">Wird beim ersten Öffnen geladen …</div>
       <div id="bst-results"></div>
 
-      <div class="bst-data-stand">Stand: 31.08.2026</div>
+      <div class="bst-data-stand">Stand: DE 31.08.2026 · AT 30.06.2026</div>
     </div>
   </div>
 
@@ -1073,12 +1014,16 @@
       resultCard.scrollIntoView({ behavior: 'smooth' });
     }
 
-    // ===== Modul 4: Betriebsstellen-Suche (Ril 100) =====
-    // Datenbank liegt als eigene Datei vor (~1,5 MB, 25.375 Einträge) und wird
-    // erst beim ersten Öffnen des Tabs per fetch() nachgeladen — nicht beim
-    // App-Start, um die Ladezeit der App selbst nicht zu belasten. Der Service
-    // Worker cacht die Anfrage danach automatisch für Offline-Nutzung (siehe sw.js).
-    // Zeilenformat je Eintrag: [code, name, kurzname, kategorie, status]
+    // ===== Modul 4: Betriebsstellen-Suche (Ril 100 + ÖBB) =====
+    // Zwei getrennte Quelldateien (DE: betriebsstellen.json, AT: betriebsstellen-at.json),
+    // werden beim ersten Öffnen des Tabs parallel per fetch() nachgeladen und zu einer
+    // gemeinsamen Suchliste zusammengeführt — nicht beim App-Start, um die Ladezeit der
+    // App selbst nicht zu belasten. Der Service Worker cacht beide Anfragen danach
+    // automatisch für Offline-Nutzung (siehe sw.js).
+    // Österreichische Stellen führen ihren eigenen ÖBB-Kurzcode (z. B. "Sb" für Salzburg
+    // Hbf), nicht den deutschen Ril100-Code mit "XA"-Präfix — die passenden XA-Einträge
+    // wurden daher aus der DE-Datei entfernt, um Duplikate zu vermeiden.
+    // Zeilenformat je Eintrag: [code, name, kurzname, kategorie, status, land]
     let bstData = null;
     let bstLoading = false;
     let bstSearchTimer = null;
@@ -1089,19 +1034,25 @@
       return div.innerHTML;
     }
 
+    function bstFetchJson(url) {
+      return fetch(url).then(res => {
+        if (!res.ok) throw new Error(url + ': HTTP ' + res.status);
+        return res.json();
+      });
+    }
+
     function bstEnsureLoaded() {
       if (bstData || bstLoading) return;
       bstLoading = true;
       const statusEl = document.getElementById('bst-status');
-      statusEl.textContent = 'Lade Betriebsstellen-Datenbank …';
+      statusEl.textContent = 'Lade Betriebsstellen-Datenbanken (DE + AT) …';
 
-      fetch('betriebsstellen.json')
-        .then(res => {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          return res.json();
-        })
-        .then(data => {
-          bstData = data;
+      Promise.all([
+        bstFetchJson('betriebsstellen.json'),
+        bstFetchJson('betriebsstellen-at.json')
+      ])
+        .then(([deData, atData]) => {
+          bstData = deData.concat(atData);
           bstLoading = false;
           bstSearch();
         })
@@ -1121,11 +1072,9 @@
       clearTimeout(bstSearchTimer);
       bstSearchTimer = setTimeout(() => {
         const q = document.getElementById('bst-search').value.trim().toLowerCase();
-        const showAll = document.getElementById('bst-show-all').checked;
 
         const matches = bstData.filter(row => {
           const [code, name, kurz, kat, status] = row;
-          if (!showAll && status !== 'Betrieb') return false;
           if (!q) return true;
           return code.toLowerCase().includes(q)
             || name.toLowerCase().includes(q)
@@ -1146,7 +1095,7 @@
         }
 
         resultsEl.innerHTML = shown.map(row => {
-          const [code, name, kurz, kat, status] = row;
+          const [code, name, kurz, kat, status, land] = row;
           const statusBadge = (status && status !== 'Betrieb')
             ? `<span class="bst-status-badge">${bstEscapeHtml(status)}</span>`
             : '';
@@ -1154,7 +1103,10 @@
             <div class="bst-item">
               <div class="bst-item-top">
                 <span class="bst-code">${bstEscapeHtml(code)}</span>
-                <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+                <span>
+                  <span class="bst-land">${bstEscapeHtml(land || '')}</span>
+                  <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+                </span>
               </div>
               <div class="bst-name">${bstEscapeHtml(name)}</div>
               ${statusBadge}
