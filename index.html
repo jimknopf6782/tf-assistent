@@ -546,6 +546,14 @@
       text-align: center;
       padding: 20px 0;
     }
+
+    .bst-data-stand {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
@@ -560,8 +568,8 @@
       <div class="nav-tabs">
         <button class="tab-btn active" onclick="switchTab(event, 'brems408')">Bremsberechnung</button>
         <button class="tab-btn" onclick="switchTab(event, 'bremse')">Festhaltekraft</button>
-        <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
         <button class="tab-btn" onclick="switchTab(event, 'bst')">Betriebsstellen</button>
+        <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
       </div>
     </div>
 
@@ -700,6 +708,8 @@
 
       <div id="bst-status" class="bst-status-line">Wird beim ersten Öffnen geladen …</div>
       <div id="bst-results"></div>
+
+      <div class="bst-data-stand">Stand: 31.08.2026</div>
     </div>
   </div>
 
