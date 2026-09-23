@@ -14,6 +14,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <script src="lok-db.js"></script>
 
   <style>
     :root {
@@ -425,6 +426,126 @@
       font-weight: 600;
       margin-top: 8px;
     }
+
+    /* Modul 4: Betriebsstellen-Suche (Ril 100) */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border);
+      transition: 0.2s;
+      border-radius: 26px;
+    }
+
+    .switch-slider::before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-muted);
+      transition: 0.2s;
+      border-radius: 50%;
+    }
+
+    .switch input:checked + .switch-slider {
+      background-color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .switch input:checked + .switch-slider::before {
+      transform: translateX(20px);
+      background-color: #ffffff;
+    }
+
+    .bst-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+
+    .bst-toggle-row label {
+      margin: 0;
+      font-size: 0.85rem;
+    }
+
+    .bst-status-line {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .bst-item {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+
+    .bst-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bst-code {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+
+    .bst-kat {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .bst-name {
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .bst-status-badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.12);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .bst-empty {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 20px 0;
+    }
   </style>
 </head>
 <body>
@@ -440,6 +561,7 @@
         <button class="tab-btn active" onclick="switchTab(event, 'brems408')">Bremsberechnung</button>
         <button class="tab-btn" onclick="switchTab(event, 'bremse')">Festhaltekraft</button>
         <button class="tab-btn" onclick="switchTab(event, 'zeit')">Zeitdifferenz</button>
+        <button class="tab-btn" onclick="switchTab(event, 'bst')">Betriebsstellen</button>
       </div>
     </div>
 
@@ -560,6 +682,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Modul 4: Betriebsstellen-Suche (Ril 100) -->
+    <div id="tab-bst" class="tab-content">
+      <div class="form-group">
+        <label for="bst-search">Suche (Code oder Name)</label>
+        <input type="text" id="bst-search" placeholder="z. B. AA oder Altona" oninput="bstSearch()" autocomplete="off">
+      </div>
+
+      <div class="bst-toggle-row">
+        <label for="bst-show-all">Auch stillgelegte / geplante anzeigen</label>
+        <label class="switch">
+          <input type="checkbox" id="bst-show-all" onchange="bstSearch()">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+
+      <div id="bst-status" class="bst-status-line">Wird beim ersten Öffnen geladen …</div>
+      <div id="bst-results"></div>
+    </div>
   </div>
 
   <footer style="text-align: center; margin-top: 20px; font-size: 0.75rem; color: var(--text-muted);">
@@ -581,6 +722,10 @@
       } else if (tabName === 'brems408') {
         document.getElementById('tab-brems408').classList.add('active');
         event.target.classList.add('active');
+      } else if (tabName === 'bst') {
+        document.getElementById('tab-bst').classList.add('active');
+        event.target.classList.add('active');
+        bstEnsureLoaded();
       }
     }
 
@@ -696,15 +841,8 @@
     }
 
     // ===== Modul 3: Bremsberechnung (Ril 408) =====
-    const B408_LOK_DB = {
-      "193": { name: "BR 193 (Vectron)", mass: 90, luep: 19, g: 72, p: 95, r: 135 },
-      "183": { name: "BR 183 (Taurus 3)", mass: 87, luep: 20, g: 80, p: 95, r: 140 },
-      "182": { name: "BR 182 (Taurus 1/2)", mass: 88, luep: 20, g: 67, p: 88, r: 130 },
-      "189": { name: "BR 189 (EuroSprinter)", mass: 87, luep: 20, g: 79, p: 99, r: 138 },
-      "187": { name: "BR 187 (Traxx 3)", mass: 87, luep: 19, g: 78, p: 95, r: 140 },
-      "186": { name: "BR 186 (Traxx 2E)", mass: 85, luep: 19, g: 73, p: 90, r: 140 },
-      "185": { name: "BR 185 (Traxx 1/2)", mass: 84, luep: 19, g: 77, p: 95, r: 140 }
-    };
+    // Lok-Datenbank (B408_LOK_DB) liegt jetzt in lok-db.js, eingebunden per
+    // <script src="lok-db.js"> im <head>, damit sie hier bereits verfügbar ist.
 
     let b408Loks = [];
     let b408CurrentRuleMode = "RIL"; // RIL oder EVU
@@ -923,6 +1061,101 @@
       const resultCard = document.getElementById("b408-result-card");
       resultCard.classList.add("visible");
       resultCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ===== Modul 4: Betriebsstellen-Suche (Ril 100) =====
+    // Datenbank liegt als eigene Datei vor (~1,5 MB, 25.375 Einträge) und wird
+    // erst beim ersten Öffnen des Tabs per fetch() nachgeladen — nicht beim
+    // App-Start, um die Ladezeit der App selbst nicht zu belasten. Der Service
+    // Worker cacht die Anfrage danach automatisch für Offline-Nutzung (siehe sw.js).
+    // Zeilenformat je Eintrag: [code, name, kurzname, kategorie, status]
+    let bstData = null;
+    let bstLoading = false;
+    let bstSearchTimer = null;
+
+    function bstEscapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function bstEnsureLoaded() {
+      if (bstData || bstLoading) return;
+      bstLoading = true;
+      const statusEl = document.getElementById('bst-status');
+      statusEl.textContent = 'Lade Betriebsstellen-Datenbank …';
+
+      fetch('betriebsstellen.json')
+        .then(res => {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(data => {
+          bstData = data;
+          bstLoading = false;
+          bstSearch();
+        })
+        .catch(err => {
+          bstLoading = false;
+          statusEl.textContent = 'Fehler beim Laden der Datenbank (offline und noch nicht im Cache?).';
+          console.log('Betriebsstellen-Ladefehler:', err);
+        });
+    }
+
+    function bstSearch() {
+      const statusEl = document.getElementById('bst-status');
+      const resultsEl = document.getElementById('bst-results');
+
+      if (!bstData) return;
+
+      clearTimeout(bstSearchTimer);
+      bstSearchTimer = setTimeout(() => {
+        const q = document.getElementById('bst-search').value.trim().toLowerCase();
+        const showAll = document.getElementById('bst-show-all').checked;
+
+        const matches = bstData.filter(row => {
+          const [code, name, kurz, kat, status] = row;
+          if (!showAll && status !== 'Betrieb') return false;
+          if (!q) return true;
+          return code.toLowerCase().includes(q)
+            || name.toLowerCase().includes(q)
+            || kurz.toLowerCase().includes(q);
+        });
+
+        const LIMIT = 100;
+        const shown = matches.slice(0, LIMIT);
+
+        if (!q) {
+          statusEl.textContent = `${bstData.length} Betriebsstellen geladen — Suchbegriff eingeben.`;
+        } else if (matches.length === 0) {
+          statusEl.textContent = 'Keine Treffer.';
+        } else if (matches.length > LIMIT) {
+          statusEl.textContent = `${matches.length} Treffer (erste ${LIMIT} angezeigt) — Suche weiter eingrenzen.`;
+        } else {
+          statusEl.textContent = `${matches.length} Treffer.`;
+        }
+
+        resultsEl.innerHTML = shown.map(row => {
+          const [code, name, kurz, kat, status] = row;
+          const statusBadge = (status && status !== 'Betrieb')
+            ? `<span class="bst-status-badge">${bstEscapeHtml(status)}</span>`
+            : '';
+          return `
+            <div class="bst-item">
+              <div class="bst-item-top">
+                <span class="bst-code">${bstEscapeHtml(code)}</span>
+                <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+              </div>
+              <div class="bst-name">${bstEscapeHtml(name)}</div>
+              ${statusBadge}
+            </div>
+          `;
+        }).join('');
+
+        if (q && matches.length === 0) {
+          resultsEl.innerHTML = `<div class="bst-empty">Keine Treffer für "${bstEscapeHtml(q)}".</div>`;
+        }
+      }, 150);
     }
 
     // Service Worker Logik für Offline-Funktionalität & Auto-Updates
