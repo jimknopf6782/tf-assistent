@@ -1086,11 +1086,11 @@
         laengenAbzugProzent = 0;
       } else {
         // Längenabzug ermitteln (Gilt NUR auf P-Bremsgewichte), je nach Regel-Modus
-        if (gesamtLaenge >= 500) {
+        if (gesamtLaenge > 500) {
           if (b408CurrentRuleMode === "RIL") {
             // Ril 408 Staffelung
-            if (gesamtLaenge >= 700) laengenAbzugProzent = 19;
-            else if (gesamtLaenge >= 600) laengenAbzugProzent = 10;
+            if (gesamtLaenge > 700) laengenAbzugProzent = 19;
+            else if (gesamtLaenge > 600) laengenAbzugProzent = 10;
             else laengenAbzugProzent = 5;
           } else {
             // BRW-EVU Regel: +1% je volle 20 m, max. 9%
