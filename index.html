@@ -1214,11 +1214,17 @@
           }).join('');
         },
         (err) => {
-          let msg = 'Standort konnte nicht ermittelt werden.';
-          if (err.code === err.PERMISSION_DENIED) msg = 'Standortzugriff wurde verweigert — bitte in den Browser-/App-Einstellungen erlauben.';
+          let msg = `Standort konnte nicht ermittelt werden (Code ${err.code}: ${err.message}).`;
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = 'Standortzugriff wurde verweigert — bitte in den Browser-/App-Einstellungen erlauben.';
+          } else if (err.code === err.TIMEOUT) {
+            msg = 'Standortabfrage hat zu lange gedauert (kein GPS-Fix). Prüfe, ob die Standortdienste am Handy generell aktiv sind, und versuch es an einer Stelle mit freier Sicht zum Himmel erneut.';
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = 'Standort nicht verfügbar — sind die Standortdienste (GPS) am Handy in den Systemeinstellungen aktiviert?';
+          }
           statusEl.textContent = msg;
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
     }
 
