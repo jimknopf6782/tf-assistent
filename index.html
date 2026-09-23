@@ -529,6 +529,11 @@
       margin-top: 4px;
     }
 
+    .bst-distance {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
     .bst-status-badge {
       display: inline-block;
       margin-top: 6px;
@@ -712,6 +717,8 @@
         <button id="bst-land-de" class="rule-btn" onclick="bstSetLandFilter('DE')">🇩🇪 DE</button>
         <button id="bst-land-at" class="rule-btn" onclick="bstSetLandFilter('AT')">🇦🇹 AT</button>
       </div>
+
+      <button class="btn-add" style="margin-bottom: 14px;" onclick="bstShowNearby()">📍 In meiner Nähe</button>
 
       <div id="bst-status" class="bst-status-line">Wird beim ersten Öffnen geladen …</div>
       <div id="bst-results"></div>
@@ -1122,6 +1129,97 @@
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
+    }
+
+    // Entfernung Luftlinie zwischen zwei Koordinaten (Haversine), in km
+    function bstHaversine(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function bstFormatDistance(km) {
+      return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+    }
+
+    // Nicht jede Betriebsstelle hat Koordinaten hinterlegt (DE: nur die auf dem
+    // aktiven Streckennetz verorteten ~7.700 von 24.948 Einträgen; AT: alle 1.368).
+    // Einträge ohne Koordinaten werden hier einfach übersprungen.
+    function bstShowNearby() {
+      const statusEl = document.getElementById('bst-status');
+      const resultsEl = document.getElementById('bst-results');
+
+      if (!bstData) {
+        bstEnsureLoaded();
+        statusEl.textContent = 'Datenbank lädt noch, bitte kurz erneut versuchen.';
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        statusEl.textContent = 'Standortabfrage wird von diesem Browser nicht unterstützt.';
+        return;
+      }
+
+      statusEl.textContent = 'Ermittle Standort …';
+      resultsEl.innerHTML = '';
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const userLat = pos.coords.latitude;
+          const userLon = pos.coords.longitude;
+
+          const withDist = bstData
+            .filter(row => {
+              const [, , , , , land, lat, lon] = row;
+              if (lat == null || lon == null) return false;
+              if (bstLandFilter !== 'ALL' && land !== bstLandFilter) return false;
+              return true;
+            })
+            .map(row => {
+              const [, , , , , , lat, lon] = row;
+              return { row, dist: bstHaversine(userLat, userLon, lat, lon) };
+            })
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 30);
+
+          document.getElementById('bst-search').value = '';
+
+          const totalWithCoords = bstData.filter(r => r[6] != null
+            && (bstLandFilter === 'ALL' || r[5] === bstLandFilter)).length;
+          statusEl.textContent = withDist.length
+            ? `${withDist.length} nächstgelegene Betriebsstellen (von ${totalWithCoords} mit hinterlegten Koordinaten).`
+            : 'Keine Betriebsstelle mit Koordinaten im gewählten Filter gefunden.';
+
+          resultsEl.innerHTML = withDist.map(({ row, dist }) => {
+            const [code, name, kurz, kat, status, land] = row;
+            const statusBadge = (status && status !== 'Betrieb')
+              ? `<span class="bst-status-badge">${bstEscapeHtml(status)}</span>`
+              : '';
+            return `
+              <div class="bst-item">
+                <div class="bst-item-top">
+                  <span class="bst-code">${bstEscapeHtml(code)}</span>
+                  <span class="bst-item-right">
+                    <span class="bst-land">${bstFlag(land)}</span>
+                    <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+                  </span>
+                </div>
+                <div class="bst-name">${bstEscapeHtml(name)} · <span class="bst-distance">${bstFormatDistance(dist)}</span></div>
+                ${statusBadge}
+              </div>
+            `;
+          }).join('');
+        },
+        (err) => {
+          let msg = 'Standort konnte nicht ermittelt werden.';
+          if (err.code === err.PERMISSION_DENIED) msg = 'Standortzugriff wurde verweigert — bitte in den Browser-/App-Einstellungen erlauben.';
+          statusEl.textContent = msg;
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     }
 
     function bstFetchJson(url) {
