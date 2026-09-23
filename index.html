@@ -449,6 +449,12 @@
       gap: 10px;
     }
 
+    .bst-item-right {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .bst-code {
       font-weight: 700;
       font-size: 1rem;
@@ -456,21 +462,24 @@
       letter-spacing: 0.5px;
     }
 
-    .bst-kat {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      background: var(--card-bg);
-      padding: 2px 8px;
-      border-radius: 4px;
-      white-space: nowrap;
+    .bst-land {
+      display: inline-block;
+      width: 26px;
+      flex-shrink: 0;
+      text-align: center;
+      font-size: 1rem;
     }
 
-    .bst-land {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: var(--accent);
-      margin-right: 4px;
+    .bst-kat {
+      display: inline-block;
+      width: 64px;
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--text-muted);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .bst-name {
@@ -645,6 +654,12 @@
       <div class="form-group">
         <label for="bst-search">Suche (Code oder Name)</label>
         <input type="text" id="bst-search" placeholder="z. B. AA oder Altona" oninput="bstSearch()" autocomplete="off">
+      </div>
+
+      <div class="rule-switcher" style="margin-top: 0; margin-bottom: 14px;">
+        <button id="bst-land-all" class="rule-btn active" onclick="bstSetLandFilter('ALL')">Alle</button>
+        <button id="bst-land-de" class="rule-btn" onclick="bstSetLandFilter('DE')">🇩🇪 DE</button>
+        <button id="bst-land-at" class="rule-btn" onclick="bstSetLandFilter('AT')">🇦🇹 AT</button>
       </div>
 
       <div id="bst-status" class="bst-status-line">Wird beim ersten Öffnen geladen …</div>
@@ -1027,6 +1042,21 @@
     let bstData = null;
     let bstLoading = false;
     let bstSearchTimer = null;
+    let bstLandFilter = 'ALL';
+
+    function bstSetLandFilter(land) {
+      bstLandFilter = land;
+      document.getElementById('bst-land-all').classList.toggle('active', land === 'ALL');
+      document.getElementById('bst-land-de').classList.toggle('active', land === 'DE');
+      document.getElementById('bst-land-at').classList.toggle('active', land === 'AT');
+      bstSearch();
+    }
+
+    function bstFlag(land) {
+      if (land === 'AT') return '🇦🇹';
+      if (land === 'DE') return '🇩🇪';
+      return '';
+    }
 
     function bstEscapeHtml(str) {
       const div = document.createElement('div');
@@ -1074,7 +1104,8 @@
         const q = document.getElementById('bst-search').value.trim().toLowerCase();
 
         const matches = bstData.filter(row => {
-          const [code, name, kurz, kat, status] = row;
+          const [code, name, kurz, kat, status, land] = row;
+          if (bstLandFilter !== 'ALL' && land !== bstLandFilter) return false;
           if (!q) return true;
           return code.toLowerCase().includes(q)
             || name.toLowerCase().includes(q)
@@ -1103,8 +1134,8 @@
             <div class="bst-item">
               <div class="bst-item-top">
                 <span class="bst-code">${bstEscapeHtml(code)}</span>
-                <span>
-                  <span class="bst-land">${bstEscapeHtml(land || '')}</span>
+                <span class="bst-item-right">
+                  <span class="bst-land">${bstFlag(land)}</span>
                   <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
                 </span>
               </div>
