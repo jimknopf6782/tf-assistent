@@ -790,7 +790,7 @@
         document.getElementById('bst-results').innerHTML = '';
         const statusEl = document.getElementById('bst-status');
         statusEl.textContent = bstData
-          ? `${bstData.length} Betriebsstellen geladen — Suchbegriff eingeben.`
+          ? `${bstData.length} Betriebsstellen geladen — Suchbegriff eingeben oder Standort nutzen.`
           : 'Wird beim ersten Öffnen geladen …';
       }
     }
@@ -1320,10 +1320,10 @@
         });
 
         const LIMIT = 100;
-        const shown = matches.slice(0, LIMIT);
+        const shown = q ? matches.slice(0, LIMIT) : [];
 
         if (!q) {
-          statusEl.textContent = `${bstData.length} Betriebsstellen geladen — Suchbegriff eingeben.`;
+          statusEl.textContent = `${bstData.length} Betriebsstellen geladen — Suchbegriff eingeben oder Standort nutzen.`;
         } else if (matches.length === 0) {
           statusEl.textContent = 'Keine Treffer.';
         } else if (matches.length > LIMIT) {
