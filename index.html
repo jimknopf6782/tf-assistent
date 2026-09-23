@@ -12,9 +12,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tf-Assistent">
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <script src="lok-db.js"></script>
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <script src="js/lok-db.js"></script>
 
   <style>
     :root {
@@ -908,8 +908,8 @@
     }
 
     // ===== Modul 3: Bremsberechnung (Ril 408) =====
-    // Lok-Datenbank (B408_LOK_DB) liegt jetzt in lok-db.js, eingebunden per
-    // <script src="lok-db.js"> im <head>, damit sie hier bereits verfügbar ist.
+    // Lok-Datenbank (B408_LOK_DB) liegt jetzt in js/lok-db.js, eingebunden per
+    // <script src="js/lok-db.js"> im <head>, damit sie hier bereits verfügbar ist.
 
     let b408Loks = [];
     let b408CurrentRuleMode = "RIL"; // RIL oder EVU
@@ -1140,7 +1140,7 @@
     }
 
     // ===== Modul 4: Betriebsstellen-Suche (Ril 100 + ÖBB) =====
-    // Zwei getrennte Quelldateien (DE: betriebsstellen.json, AT: betriebsstellen-at.json),
+    // Zwei getrennte Quelldateien (DE: data/betriebsstellen.json, AT: data/betriebsstellen-at.json),
     // werden beim ersten Öffnen des Tabs parallel per fetch() nachgeladen und zu einer
     // gemeinsamen Suchliste zusammengeführt — nicht beim App-Start, um die Ladezeit der
     // App selbst nicht zu belasten. Der Service Worker cacht beide Anfragen danach
@@ -1285,8 +1285,8 @@
       statusEl.textContent = 'Lade Betriebsstellen-Datenbanken (DE + AT) …';
 
       Promise.all([
-        bstFetchJson('betriebsstellen.json'),
-        bstFetchJson('betriebsstellen-at.json')
+        bstFetchJson('data/betriebsstellen.json'),
+        bstFetchJson('data/betriebsstellen-at.json')
       ])
         .then(([deData, atData]) => {
           bstData = deData.concat(atData);
