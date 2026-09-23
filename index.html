@@ -416,6 +416,48 @@
       color: var(--text);
     }
 
+    .result-breakdown {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .breakdown-row strong {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .breakdown-total {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .breakdown-total strong {
+      color: var(--accent);
+      font-size: 1rem;
+    }
+
+    .result-longabzug {
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
     .badge-info {
       display: inline-block;
       background: rgba(220, 38, 38, 0.15);
@@ -630,22 +672,31 @@
 
         <div class="result-grid">
           <div class="result-item">
-            <span>Gesamtzugmasse</span>
-            <strong id="b408-res-masse">0 t</strong>
-          </div>
-          <div class="result-item">
-            <span>Wirksames Bremsgewicht</span>
-            <strong id="b408-res-bremsgewicht">0 t</strong>
-          </div>
-          <div class="result-item">
             <span>Gesamtzuglänge</span>
             <strong id="b408-res-laenge">0 m</strong>
           </div>
           <div class="result-item">
-            <span>Längenabzug</span>
-            <strong id="b408-res-abzug">0 %</strong>
+            <span>Gesamtzuggewicht</span>
+            <strong id="b408-res-masse">0 t</strong>
           </div>
         </div>
+
+        <div class="result-breakdown">
+          <div class="breakdown-row">
+            <span>Bremsgewicht Wagenzug</span>
+            <strong id="b408-res-brems-wagen">0 t</strong>
+          </div>
+          <div class="breakdown-row">
+            <span>Bremsgewicht Loks</span>
+            <strong id="b408-res-brems-lok">0 t</strong>
+          </div>
+          <div class="breakdown-row breakdown-total">
+            <span>Bremsgewicht gesamter Zug</span>
+            <strong id="b408-res-bremsgewicht">0 t</strong>
+          </div>
+        </div>
+
+        <div class="result-longabzug">Längenabzug: <span id="b408-res-abzug">0 %</span></div>
       </div>
     </div>
 
@@ -930,7 +981,7 @@
     }
 
     function b408CalculateBrakes() {
-      const wagenGewicht = Math.floor(parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0);
+      const wagenGewicht = Math.ceil(parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0);
       const wagenLaengeInput = parseFloat(document.getElementById("b408-wagen-laenge").value) || 0;
       const wagenP = Math.floor(parseFloat(document.getElementById("b408-wagen-p").value) || 0);
       const wagenG = Math.floor(parseFloat(document.getElementById("b408-wagen-g").value) || 0);
@@ -946,7 +997,7 @@
 
       b408Loks.forEach(l => {
         const data = B408_LOK_DB[l.type];
-        lokGewichtGesamt += (parseFloat(l.mass) || 0);
+        lokGewichtGesamt += Math.ceil(parseFloat(l.mass) || 0);
         lokLuepGesamt += data.luep;
 
         if (l.pos === "G") {
@@ -974,11 +1025,15 @@
       const isReinerGZug = (wagenP === 0 && wagenG > 0 && allLoksInG);
 
       let laengenAbzugProzent = 0;
+      let wagenBremsEffektiv = 0;
+      let lokBremsEffektiv = 0;
       let wirksamesBremsgewicht = 0;
       let modeText = "";
 
       if (isReinerGZug) {
-        wirksamesBremsgewicht = wagenG + lokBremsG_Raw;
+        wagenBremsEffektiv = wagenG;
+        lokBremsEffektiv = lokBremsG_Raw;
+        wirksamesBremsgewicht = wagenBremsEffektiv + lokBremsEffektiv;
         modeText = "Durchgehend G (Keine Abzüge)";
         laengenAbzugProzent = 0;
       } else {
@@ -998,14 +1053,17 @@
 
         const laengenFaktor = (100 - laengenAbzugProzent) / 100;
 
-        const pBremsUnabgezogen = wagenP + lokBremsP_R;
-        const pBremsEffektiv = Math.floor(pBremsUnabgezogen * laengenFaktor);
+        // P-Anteile: Wagenzug und Loks getrennt abgezogen (statt vorher zusammengezählt),
+        // damit sich die Aufschlüsselung Wagenzug/Loks unten sauber ausgeben lässt.
+        const wagenPEffektiv = Math.floor(wagenP * laengenFaktor);
+        const lokPEffektiv = Math.floor(lokBremsP_R * laengenFaktor);
 
         const wagenGEffektiv = Math.floor(wagenG * 0.75);
         const lokGEffektiv = Math.floor(lokBremsG_Raw * 0.75);
-        const gBremsEffektiv = wagenGEffektiv + lokGEffektiv;
 
-        wirksamesBremsgewicht = pBremsEffektiv + gBremsEffektiv;
+        wagenBremsEffektiv = wagenPEffektiv + wagenGEffektiv;
+        lokBremsEffektiv = lokPEffektiv + lokGEffektiv;
+        wirksamesBremsgewicht = wagenBremsEffektiv + lokBremsEffektiv;
 
         const ruleTag = (b408CurrentRuleMode === "EVU") ? " BRW-EVU" : "";
         if (wagenG > 0 || lokBremsG_Raw > 0) {
@@ -1019,9 +1077,11 @@
 
       document.getElementById("b408-res-prozent").innerText = `${bremsProzent} %`;
       document.getElementById("b408-res-mode-badge").innerText = modeText;
-      document.getElementById("b408-res-masse").innerText = `${gesamtMasse} t`;
-      document.getElementById("b408-res-bremsgewicht").innerText = `${wirksamesBremsgewicht} t`;
       document.getElementById("b408-res-laenge").innerText = `${gesamtLaenge} m`;
+      document.getElementById("b408-res-masse").innerText = `${gesamtMasse} t`;
+      document.getElementById("b408-res-brems-wagen").innerText = `${wagenBremsEffektiv} t`;
+      document.getElementById("b408-res-brems-lok").innerText = `${lokBremsEffektiv} t`;
+      document.getElementById("b408-res-bremsgewicht").innerText = `${wirksamesBremsgewicht} t`;
       document.getElementById("b408-res-abzug").innerText = `${laengenAbzugProzent} %`;
 
       const resultCard = document.getElementById("b408-result-card");
