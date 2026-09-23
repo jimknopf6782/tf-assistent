@@ -1225,7 +1225,7 @@
     function bstFetchJson(url) {
       return fetch(url).then(res => {
         if (!res.ok) throw new Error(url + ': HTTP ' + res.status);
-        return res.json();
+        return res.json().catch(e => { throw new Error(url + ': ungültiges JSON (' + e.message + ')'); });
       });
     }
 
@@ -1246,7 +1246,7 @@
         })
         .catch(err => {
           bstLoading = false;
-          statusEl.textContent = 'Fehler beim Laden der Datenbank (offline und noch nicht im Cache?).';
+          statusEl.textContent = 'Fehler beim Laden: ' + (err && err.message ? err.message : String(err));
           console.log('Betriebsstellen-Ladefehler:', err);
         });
     }
