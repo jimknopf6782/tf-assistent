@@ -572,6 +572,20 @@
       background-color: var(--accent);
     }
 
+    .fb-btn-end {
+      background-color: #475569;
+    }
+
+    #fb-btn-row-single .fb-main-btn,
+    #fb-btn-row-double .fb-main-btn {
+      margin-bottom: 0;
+    }
+
+    #fb-btn-row-single,
+    #fb-btn-row-double {
+      margin-bottom: 20px;
+    }
+
     .fb-log-header {
       display: flex;
       justify-content: space-between;
@@ -614,14 +628,37 @@
       margin-top: 3px;
     }
 
-    .fb-older-hint {
-      margin-top: 10px;
-      padding: 10px 12px;
-      background: rgba(217, 119, 6, 0.12);
-      border: 1px solid #d97706;
+    .fb-shift-entry {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
       border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+
+    .fb-shift-entry-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .fb-shift-entry-detail {
       font-size: 0.78rem;
-      color: #d97706;
+      color: var(--text-muted);
+      margin-top: 3px;
+      margin-bottom: 8px;
+    }
+
+    .fb-shift-export-btn {
+      font-size: 0.75rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
     }
 
     .fb-footer-actions {
@@ -876,26 +913,42 @@
       <div id="fb-main">
         <div id="fb-status-box" class="fb-status-box">
           <div id="fb-status-label" class="fb-status-label">Bereit</div>
-          <div id="fb-status-detail" class="fb-status-detail">Noch keine Aufzeichnung gestartet.</div>
+          <div id="fb-status-detail" class="fb-status-detail">Noch keine Schicht begonnen.</div>
         </div>
 
-        <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton()">Start</button>
+        <div id="fb-btn-row-single">
+          <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Abfahrt</button>
+        </div>
+        <div id="fb-btn-row-double" style="display: none;">
+          <button class="fb-main-btn fb-btn-start" style="margin-bottom: 10px;" onclick="fbPressButton('weiterfahrt')">Weiterfahrt</button>
+          <button class="fb-main-btn fb-btn-end" onclick="fbPressButton('beenden')">Ankunft</button>
+        </div>
 
         <div id="fb-log-wrap">
           <div class="fb-log-header">
-            <span>Heutige Abschnitte</span>
+            <span id="fb-log-title">Aktuelle Schicht</span>
             <span id="fb-totals" class="fb-totals"></span>
           </div>
           <div id="fb-log"></div>
         </div>
 
         <div class="fb-footer-actions">
-          <button class="btn-add" onclick="fbExportReport()">📄 Tagesbericht exportieren (.txt)</button>
-          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Log zurücksetzen</button>
+          <button class="btn-add" onclick="fbExportShift(null)">📄 Aktuelle Schicht exportieren (.txt)</button>
+        </div>
+
+        <div id="fb-older-wrap" style="display: none;">
+          <div class="fb-log-header" style="margin-top: 20px;">
+            <span>Frühere Schichten</span>
+          </div>
+          <div id="fb-older-list"></div>
+        </div>
+
+        <div class="fb-footer-actions">
+          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
         </div>
       </div>
 
-      <!-- Standort-Auswahl (beim Start/Stopp) -->
+      <!-- Standort-Auswahl (beim Abfahrt/Stopp/Weiterfahrt/Beenden) -->
       <div id="fb-picker" class="fb-picker" style="display: none;">
         <div class="fb-picker-title" id="fb-picker-title">Betriebsstelle wählen</div>
         <div class="form-group">
@@ -1448,15 +1501,21 @@
     }
 
     // ===== Modul 5: Fahrtenbuch =====
-    // Rein manuell (Start/Stopp-Tasten), keine Hintergrund-Standortverfolgung —
-    // nur beim Tastendruck wird einmalig der Standort abgefragt, um eine
-    // Betriebsstellen-Auswahl vorzuschlagen. Log wird in localStorage gehalten,
-    // damit nichts verloren geht, wenn die App zwischendurch geschlossen wird.
+    // Schicht-Modell statt Kalendertag: "Abfahrt" beginnt eine neue Schicht,
+    // "Stopp"/"Weiterfahrt" wechseln innerhalb der Schicht zwischen Fahrt und
+    // Stand, "Schicht beenden" schließt sie ab. Die Zeit ZWISCHEN zwei
+    // Schichten (z. B. Feierabend bis zum nächsten Dienstantritt) zählt
+    // bewusst zu KEINER der beiden Schichten — kein künstlicher Stand-Eintrag.
+    // Rein manuell, keine Hintergrund-Standortverfolgung — nur beim
+    // Tastendruck wird einmalig der Standort abgefragt. Log liegt in
+    // localStorage, damit nichts verloren geht, wenn die App zwischendurch
+    // geschlossen wird. Ältere Schichten bleiben dauerhaft gespeichert und
+    // einzeln exportierbar — kein automatisches Löschen, keine Erinnerungen.
     // WICHTIG: Dieses Modul wird absichtlich NICHT durch resetModuleState()
     // zurückgesetzt — eine Schicht soll über mehrere App-Besuche bestehen bleiben.
     const FB_STORAGE_KEY = 'tfFahrtenbuchLog';
-    let fbLog = [];
-    let fbPickerPurpose = null; // 'start' | 'stopp'
+    let fbLog = []; // flache Liste: {type: 'start'|'stopp'|'ende', time, ort}
+    let fbPickerPurpose = null; // 'start' | 'stopp' | 'ende' — welcher Eintragstyp als nächstes gespeichert wird
     let fbPickerCandidates = [];
 
     function fbLoad() {
@@ -1481,6 +1540,11 @@
       return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
+    function fbFormatDateTime(iso) {
+      const d = new Date(iso);
+      return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}. ${fbFormatTime(iso)}`;
+    }
+
     function fbFormatDuration(ms) {
       const totalMin = Math.round(ms / 60000);
       const h = Math.floor(totalMin / 60);
@@ -1488,85 +1552,109 @@
       return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
     }
 
+    // 'idle' = keine Schicht offen, 'fahrt' = Schicht läuft, fährt gerade,
+    // 'stand' = Schicht läuft, steht gerade (Weiterfahrt oder Beenden möglich)
     function fbCurrentStatus() {
       if (fbLog.length === 0) return 'idle';
-      return fbLog[fbLog.length - 1].type === 'start' ? 'fahrt' : 'stand';
+      const lastType = fbLog[fbLog.length - 1].type;
+      if (lastType === 'ende') return 'idle';
+      return lastType === 'start' ? 'fahrt' : 'stand';
     }
 
-    // Lokaler Datums-Schlüssel (YYYY-MM-DD), keine UTC-Verschiebung
-    function fbDateKey(iso) {
-      const d = new Date(iso);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    }
+    // Zerlegt das Log in einzelne Schichten. Eine Schicht beginnt direkt nach
+    // einem 'ende'-Eintrag (oder am Log-Anfang) und läuft bis zum nächsten
+    // 'ende' (geschlossen) oder bis zum Log-Ende (offen, noch laufend).
+    function fbBuildShifts() {
+      const shifts = [];
+      let current = [];
+      fbLog.forEach(entry => {
+        current.push(entry);
+        if (entry.type === 'ende') {
+          shifts.push(current);
+          current = [];
+        }
+      });
+      if (current.length > 0) shifts.push(current);
 
-    // Baut alle Fahrt-/Steh-Abschnitte aus dem Log. Ein Abschnitt, der über
-    // Mitternacht geht, wird komplett dem Tag zugerechnet, an dem er beginnt.
-    function fbBuildSegments() {
-      const segments = [];
-      for (let i = 0; i < fbLog.length - 1; i++) {
-        const a = fbLog[i];
-        const b = fbLog[i + 1];
-        segments.push({
-          art: a.type === 'start' ? 'Fahrt' : 'Stand',
-          von: a.ort.name,
-          bis: b.ort.name,
-          zeitVon: a.time,
-          zeitBis: b.time,
-          dauerMs: new Date(b.time) - new Date(a.time),
-          dateKey: fbDateKey(a.time)
+      return shifts.map(entries => {
+        const segments = [];
+        for (let i = 0; i < entries.length - 1; i++) {
+          const a = entries[i];
+          const b = entries[i + 1];
+          segments.push({
+            art: a.type === 'start' ? 'Fahrt' : 'Stand',
+            von: a.ort.name,
+            bis: b.ort.name,
+            zeitVon: a.time,
+            zeitBis: b.time,
+            dauerMs: new Date(b.time) - new Date(a.time)
+          });
+        }
+        let fahrzeitMs = 0, stehzeitMs = 0;
+        segments.forEach(s => {
+          if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
         });
-      }
-      return segments;
+        return {
+          entries,
+          segments,
+          open: entries[entries.length - 1].type !== 'ende',
+          start: entries[0],
+          end: entries[entries.length - 1].type === 'ende' ? entries[entries.length - 1] : null,
+          fahrzeitMs,
+          stehzeitMs
+        };
+      });
     }
 
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       const status = fbCurrentStatus();
-      const btn = document.getElementById('fb-main-btn');
+      const singleRow = document.getElementById('fb-btn-row-single');
+      const doubleRow = document.getElementById('fb-btn-row-double');
+      const mainBtn = document.getElementById('fb-main-btn');
       const label = document.getElementById('fb-status-label');
       const detail = document.getElementById('fb-status-detail');
 
       if (status === 'idle') {
-        btn.textContent = 'Start';
-        btn.className = 'fb-main-btn fb-btn-start';
+        singleRow.style.display = 'block';
+        doubleRow.style.display = 'none';
+        mainBtn.textContent = 'Abfahrt';
+        mainBtn.className = 'fb-main-btn fb-btn-start';
+        mainBtn.onclick = () => fbPressButton('abfahrt');
         label.textContent = 'Bereit';
-        detail.textContent = 'Noch keine Aufzeichnung gestartet.';
+        detail.textContent = 'Noch keine Schicht begonnen.';
       } else if (status === 'fahrt') {
+        singleRow.style.display = 'block';
+        doubleRow.style.display = 'none';
         const last = fbLog[fbLog.length - 1];
-        btn.textContent = 'Stopp';
-        btn.className = 'fb-main-btn fb-btn-stop';
+        mainBtn.textContent = 'Stopp';
+        mainBtn.className = 'fb-main-btn fb-btn-stop';
+        mainBtn.onclick = () => fbPressButton('stopp');
         label.textContent = 'Fährt';
         detail.textContent = `Seit ${fbFormatTime(last.time)} ab ${last.ort.name}`;
       } else {
+        singleRow.style.display = 'none';
+        doubleRow.style.display = 'block';
         const last = fbLog[fbLog.length - 1];
-        btn.textContent = 'Start';
-        btn.className = 'fb-main-btn fb-btn-start';
         label.textContent = 'Steht';
         detail.textContent = `Seit ${fbFormatTime(last.time)} in ${last.ort.name}`;
       }
 
-      // Log-Liste (neueste zuerst) — zeigt nur die Abschnitte von HEUTE.
-      // Ältere, noch nicht exportierte Tage bleiben im Speicher, bekommen
-      // aber unten einen eigenen Hinweis, damit nichts übersehen wird.
+      const shifts = fbBuildShifts();
+      const currentShift = shifts.length > 0 ? shifts[shifts.length - 1] : null;
+      const olderShifts = shifts.length > 1 ? shifts.slice(0, -1).reverse() : [];
+
+      document.getElementById('fb-log-title').textContent =
+        currentShift && currentShift.open ? 'Aktuelle Schicht' : 'Letzte Schicht';
+
       const logEl = document.getElementById('fb-log');
-      const allSegments = fbBuildSegments();
-      const todayKey = fbDateKey(new Date().toISOString());
-      const segments = allSegments.filter(s => s.dateKey === todayKey);
-      const olderDays = [...new Set(allSegments.filter(s => s.dateKey !== todayKey).map(s => s.dateKey))].sort();
-
-      let fahrzeitMs = 0, stehzeitMs = 0;
-      segments.forEach(s => {
-        if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
-      });
-      document.getElementById('fb-totals').textContent = segments.length
-        ? `Fahrzeit ${fbFormatDuration(fahrzeitMs)} · Stehzeit ${fbFormatDuration(stehzeitMs)}`
-        : '';
-
-      let html = '';
-      if (segments.length === 0) {
-        html += '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
+      if (!currentShift || currentShift.segments.length === 0) {
+        logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
+        document.getElementById('fb-totals').textContent = '';
       } else {
-        html += segments.slice().reverse().map(s => `
+        document.getElementById('fb-totals').textContent =
+          `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Stehzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
+        logEl.innerHTML = currentShift.segments.slice().reverse().map(s => `
           <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
             <div class="fb-log-entry-top">
               <span>${s.art}</span>
@@ -1577,28 +1665,43 @@
         `).join('');
       }
 
-      if (olderDays.length > 0) {
-        const tageTxt = olderDays.map(k => {
-          const [y, m, d] = k.split('-');
-          return `${d}.${m}.${y}`;
-        }).join(', ');
-        html += `<div class="fb-older-hint">⚠ Noch nicht exportierte ältere Tage im Speicher: ${tageTxt}. "Tagesbericht exportieren" sichert ALLE Tage auf einmal.</div>`;
+      const olderWrap = document.getElementById('fb-older-wrap');
+      if (olderShifts.length === 0) {
+        olderWrap.style.display = 'none';
+      } else {
+        olderWrap.style.display = 'block';
+        document.getElementById('fb-older-list').innerHTML = olderShifts.map((shift, idx) => {
+          const realIndex = shifts.length - 2 - idx; // Index in "shifts" (chronologisch)
+          const vonTxt = fbFormatDateTime(shift.start.time);
+          const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
+          return `
+            <div class="fb-shift-entry">
+              <div class="fb-shift-entry-top">
+                <span>${vonTxt} → ${bisTxt}</span>
+                <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})">Exportieren</button>
+              </div>
+              <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Stehzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
+            </div>
+          `;
+        }).join('');
       }
-
-      logEl.innerHTML = html;
     }
 
-    function fbPressButton() {
-      const status = fbCurrentStatus();
-      fbPickerPurpose = (status === 'fahrt') ? 'stopp' : 'start';
+    function fbPressButton(action) {
+      // 'abfahrt'/'weiterfahrt' -> neuer 'start'-Eintrag (Fahrt beginnt)
+      // 'stopp' -> 'stopp'-Eintrag (Fahrt endet, Stand beginnt, Schicht läuft weiter)
+      // 'beenden' -> 'ende'-Eintrag (Stand endet, Schicht wird geschlossen)
+      if (action === 'abfahrt' || action === 'weiterfahrt') fbPickerPurpose = 'start';
+      else if (action === 'stopp') fbPickerPurpose = 'stopp';
+      else if (action === 'beenden') fbPickerPurpose = 'ende';
       fbOpenPicker();
     }
 
     function fbOpenPicker() {
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-picker').style.display = 'block';
-      document.getElementById('fb-picker-title').textContent =
-        fbPickerPurpose === 'start' ? 'Startort wählen' : 'Stopp-Ort wählen';
+      const titles = { start: 'Ort wählen', stopp: 'Stopp-Ort wählen', ende: 'End-Ort der Schicht wählen' };
+      document.getElementById('fb-picker-title').textContent = titles[fbPickerPurpose] || 'Betriebsstelle wählen';
       document.getElementById('fb-picker-search').value = '';
       document.getElementById('fb-picker-list').innerHTML = '';
       const statusEl = document.getElementById('fb-picker-status');
@@ -1695,64 +1798,47 @@
     }
 
     function fbResetLog() {
-      if (!confirm('Fahrtenbuch-Log wirklich komplett löschen?')) return;
+      if (!confirm('Wirklich ALLE Schichten (aktuelle und frühere) komplett löschen?')) return;
       fbLog = [];
       fbSave();
       fbRender();
     }
 
-    // Exportiert IMMER den kompletten Log, nach Kalendertag gruppiert — nicht
-    // nur den heutigen Tag. So geht nichts verloren, auch wenn mal ein paar
-    // Tage lang nicht exportiert wurde. Ein Abschnitt über Mitternacht zählt
-    // komplett zu dem Tag, an dem er beginnt.
-    function fbExportReport() {
-      const allSegments = fbBuildSegments();
-      if (allSegments.length === 0) {
-        alert('Noch keine abgeschlossenen Abschnitte zum Exportieren.');
+    // Exportiert genau EINE Schicht (per Index in fbBuildShifts()) als Textdatei.
+    // shiftIndex === null -> aktuelle/letzte Schicht.
+    function fbExportShift(shiftIndex) {
+      const shifts = fbBuildShifts();
+      if (shifts.length === 0) {
+        alert('Noch keine Schicht vorhanden.');
+        return;
+      }
+      const idx = shiftIndex === null ? shifts.length - 1 : shiftIndex;
+      const shift = shifts[idx];
+      if (!shift || shift.segments.length === 0) {
+        alert('Diese Schicht hat noch keine abgeschlossenen Abschnitte.');
         return;
       }
 
-      const dayKeys = [...new Set(allSegments.map(s => s.dateKey))].sort();
-      const heute = new Date();
+      const vonTxt = fbFormatDateTime(shift.start.time);
+      const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
 
-      let text = `Fahrtenbuch-Export — erstellt am ${heute.toLocaleDateString('de-DE')} ${fbFormatTime(heute.toISOString())}\n`;
+      let text = `Schichtbericht — ${vonTxt} bis ${bisTxt}\n`;
       text += `Tf-Assistent, ${window.location.href}\n`;
-      text += '='.repeat(40) + '\n';
-
-      let gesamtFahrzeitMs = 0, gesamtStehzeitMs = 0;
-
-      dayKeys.forEach(key => {
-        const daySegments = allSegments.filter(s => s.dateKey === key);
-        const [y, m, d] = key.split('-');
-        let fahrzeitMs = 0, stehzeitMs = 0;
-        daySegments.forEach(s => {
-          if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
-        });
-        gesamtFahrzeitMs += fahrzeitMs;
-        gesamtStehzeitMs += stehzeitMs;
-
-        text += `\n${d}.${m}.${y}\n` + '-'.repeat(40) + '\n';
-        daySegments.forEach(s => {
-          text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
-        });
-        text += `Tag-Fahrzeit: ${fbFormatDuration(fahrzeitMs)} · Tag-Stehzeit: ${fbFormatDuration(stehzeitMs)}\n`;
+      text += '='.repeat(40) + '\n\n';
+      shift.segments.forEach(s => {
+        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
       });
-
-      if (dayKeys.length > 1) {
-        text += '\n' + '='.repeat(40) + '\n';
-        text += `Gesamt über ${dayKeys.length} Tage:\n`;
-        text += `Gesamt-Fahrzeit:  ${fbFormatDuration(gesamtFahrzeitMs)}\n`;
-        text += `Gesamt-Stehzeit:  ${fbFormatDuration(gesamtStehzeitMs)}\n`;
-      }
+      text += '\n' + '-'.repeat(40) + '\n';
+      text += `Fahrzeit:  ${fbFormatDuration(shift.fahrzeitMs)}\n`;
+      text += `Stehzeit:  ${fbFormatDuration(shift.stehzeitMs)}\n`;
+      if (shift.open) text += '\n(Schicht noch nicht beendet — Stand bei Export)\n';
 
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const dateForFile = heute.toISOString().slice(0, 10);
+      const fileDate = new Date(shift.start.time).toISOString().slice(0, 10);
       a.href = url;
-      a.download = dayKeys.length > 1
-        ? `Fahrtenbuch_${dayKeys[0]}_bis_${dayKeys[dayKeys.length - 1]}.txt`
-        : `Tagesbericht_${dateForFile}.txt`;
+      a.download = `Schicht_${fileDate}_${fbFormatTime(shift.start.time).replace(':', '')}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
