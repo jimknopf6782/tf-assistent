@@ -614,6 +614,16 @@
       margin-top: 3px;
     }
 
+    .fb-older-hint {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(217, 119, 6, 0.12);
+      border: 1px solid #d97706;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: #d97706;
+    }
+
     .fb-footer-actions {
       display: flex;
       flex-direction: column;
@@ -1483,6 +1493,32 @@
       return fbLog[fbLog.length - 1].type === 'start' ? 'fahrt' : 'stand';
     }
 
+    // Lokaler Datums-Schlüssel (YYYY-MM-DD), keine UTC-Verschiebung
+    function fbDateKey(iso) {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // Baut alle Fahrt-/Steh-Abschnitte aus dem Log. Ein Abschnitt, der über
+    // Mitternacht geht, wird komplett dem Tag zugerechnet, an dem er beginnt.
+    function fbBuildSegments() {
+      const segments = [];
+      for (let i = 0; i < fbLog.length - 1; i++) {
+        const a = fbLog[i];
+        const b = fbLog[i + 1];
+        segments.push({
+          art: a.type === 'start' ? 'Fahrt' : 'Stand',
+          von: a.ort.name,
+          bis: b.ort.name,
+          zeitVon: a.time,
+          zeitBis: b.time,
+          dauerMs: new Date(b.time) - new Date(a.time),
+          dateKey: fbDateKey(a.time)
+        });
+      }
+      return segments;
+    }
+
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       const status = fbCurrentStatus();
@@ -1509,21 +1545,14 @@
         detail.textContent = `Seit ${fbFormatTime(last.time)} in ${last.ort.name}`;
       }
 
-      // Log-Liste (neueste zuerst), Abschnitte aus Start/Stopp-Paaren bilden
+      // Log-Liste (neueste zuerst) — zeigt nur die Abschnitte von HEUTE.
+      // Ältere, noch nicht exportierte Tage bleiben im Speicher, bekommen
+      // aber unten einen eigenen Hinweis, damit nichts übersehen wird.
       const logEl = document.getElementById('fb-log');
-      const segments = [];
-      for (let i = 0; i < fbLog.length - 1; i++) {
-        const a = fbLog[i];
-        const b = fbLog[i + 1];
-        segments.push({
-          art: a.type === 'start' ? 'Fahrt' : 'Stand',
-          von: a.ort.name,
-          bis: b.ort.name,
-          zeitVon: a.time,
-          zeitBis: b.time,
-          dauerMs: new Date(b.time) - new Date(a.time)
-        });
-      }
+      const allSegments = fbBuildSegments();
+      const todayKey = fbDateKey(new Date().toISOString());
+      const segments = allSegments.filter(s => s.dateKey === todayKey);
+      const olderDays = [...new Set(allSegments.filter(s => s.dateKey !== todayKey).map(s => s.dateKey))].sort();
 
       let fahrzeitMs = 0, stehzeitMs = 0;
       segments.forEach(s => {
@@ -1533,10 +1562,11 @@
         ? `Fahrzeit ${fbFormatDuration(fahrzeitMs)} · Stehzeit ${fbFormatDuration(stehzeitMs)}`
         : '';
 
+      let html = '';
       if (segments.length === 0) {
-        logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
+        html += '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
       } else {
-        logEl.innerHTML = segments.slice().reverse().map(s => `
+        html += segments.slice().reverse().map(s => `
           <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
             <div class="fb-log-entry-top">
               <span>${s.art}</span>
@@ -1546,6 +1576,16 @@
           </div>
         `).join('');
       }
+
+      if (olderDays.length > 0) {
+        const tageTxt = olderDays.map(k => {
+          const [y, m, d] = k.split('-');
+          return `${d}.${m}.${y}`;
+        }).join(', ');
+        html += `<div class="fb-older-hint">⚠ Noch nicht exportierte ältere Tage im Speicher: ${tageTxt}. "Tagesbericht exportieren" sichert ALLE Tage auf einmal.</div>`;
+      }
+
+      logEl.innerHTML = html;
     }
 
     function fbPressButton() {
@@ -1661,47 +1701,58 @@
       fbRender();
     }
 
+    // Exportiert IMMER den kompletten Log, nach Kalendertag gruppiert — nicht
+    // nur den heutigen Tag. So geht nichts verloren, auch wenn mal ein paar
+    // Tage lang nicht exportiert wurde. Ein Abschnitt über Mitternacht zählt
+    // komplett zu dem Tag, an dem er beginnt.
     function fbExportReport() {
-      if (fbLog.length < 2) {
+      const allSegments = fbBuildSegments();
+      if (allSegments.length === 0) {
         alert('Noch keine abgeschlossenen Abschnitte zum Exportieren.');
         return;
       }
-      const segments = [];
-      for (let i = 0; i < fbLog.length - 1; i++) {
-        const a = fbLog[i];
-        const b = fbLog[i + 1];
-        segments.push({
-          art: a.type === 'start' ? 'Fahrt' : 'Stand',
-          von: a.ort.name,
-          bis: b.ort.name,
-          zeitVon: a.time,
-          zeitBis: b.time,
-          dauerMs: new Date(b.time) - new Date(a.time)
+
+      const dayKeys = [...new Set(allSegments.map(s => s.dateKey))].sort();
+      const heute = new Date();
+
+      let text = `Fahrtenbuch-Export — erstellt am ${heute.toLocaleDateString('de-DE')} ${fbFormatTime(heute.toISOString())}\n`;
+      text += `Tf-Assistent, ${window.location.href}\n`;
+      text += '='.repeat(40) + '\n';
+
+      let gesamtFahrzeitMs = 0, gesamtStehzeitMs = 0;
+
+      dayKeys.forEach(key => {
+        const daySegments = allSegments.filter(s => s.dateKey === key);
+        const [y, m, d] = key.split('-');
+        let fahrzeitMs = 0, stehzeitMs = 0;
+        daySegments.forEach(s => {
+          if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
         });
-      }
-      let fahrzeitMs = 0, stehzeitMs = 0;
-      segments.forEach(s => {
-        if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
+        gesamtFahrzeitMs += fahrzeitMs;
+        gesamtStehzeitMs += stehzeitMs;
+
+        text += `\n${d}.${m}.${y}\n` + '-'.repeat(40) + '\n';
+        daySegments.forEach(s => {
+          text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
+        });
+        text += `Tag-Fahrzeit: ${fbFormatDuration(fahrzeitMs)} · Tag-Stehzeit: ${fbFormatDuration(stehzeitMs)}\n`;
       });
 
-      const heute = new Date();
-      const datumStr = heute.toLocaleDateString('de-DE');
-      let text = `Tagesbericht Fahrtenbuch — ${datumStr}\n`;
-      text += `Tf-Assistent, ${window.location.href}\n`;
-      text += '='.repeat(40) + '\n\n';
-      segments.forEach(s => {
-        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
-      });
-      text += '\n' + '-'.repeat(40) + '\n';
-      text += `Gesamt-Fahrzeit:  ${fbFormatDuration(fahrzeitMs)}\n`;
-      text += `Gesamt-Stehzeit:  ${fbFormatDuration(stehzeitMs)}\n`;
+      if (dayKeys.length > 1) {
+        text += '\n' + '='.repeat(40) + '\n';
+        text += `Gesamt über ${dayKeys.length} Tage:\n`;
+        text += `Gesamt-Fahrzeit:  ${fbFormatDuration(gesamtFahrzeitMs)}\n`;
+        text += `Gesamt-Stehzeit:  ${fbFormatDuration(gesamtStehzeitMs)}\n`;
+      }
 
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const dateForFile = heute.toISOString().slice(0, 10);
       a.href = url;
-      a.download = `Tagesbericht_${dateForFile}.txt`;
+      a.download = dayKeys.length > 1
+        ? `Fahrtenbuch_${dayKeys[0]}_bis_${dayKeys[dayKeys.length - 1]}.txt`
+        : `Tagesbericht_${dateForFile}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
