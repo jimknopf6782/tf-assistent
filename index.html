@@ -529,6 +529,102 @@
       font-size: 0.72rem;
       color: var(--text-muted);
     }
+
+    /* Modul 5: Fahrtenbuch */
+    .fb-status-box {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .fb-status-label {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .fb-status-detail {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .fb-main-btn {
+      display: block;
+      width: 100%;
+      padding: 18px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #ffffff;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    .fb-btn-start {
+      background-color: #16a34a;
+    }
+
+    .fb-btn-stop {
+      background-color: var(--accent);
+    }
+
+    .fb-log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .fb-totals {
+      font-size: 0.75rem;
+    }
+
+    .fb-log-entry {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+    }
+
+    .fb-log-entry-top {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+
+    .fb-log-fahrt .fb-log-entry-top {
+      color: var(--accent);
+    }
+
+    .fb-log-stand .fb-log-entry-top {
+      color: var(--text-muted);
+    }
+
+    .fb-log-entry-detail {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .fb-footer-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .fb-picker-title {
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
@@ -578,11 +674,40 @@
           <span class="home-tile-label">Festhaltekraft</span>
         </button>
         <button class="home-tile" onclick="openModule('bst')">
-          <span class="home-tile-icon">📍</span>
+          <span class="home-tile-icon">
+            <svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M32 6 C20 6 11 15.5 11 27 C11 42 32 58 32 58 C32 58 53 42 53 27 C53 15.5 44 6 32 6 Z"/>
+              <circle cx="32" cy="26" r="8"/>
+            </svg>
+          </span>
           <span class="home-tile-label">Betriebsstellen</span>
         </button>
+        <button class="home-tile" onclick="openModule('fahrtenbuch')">
+          <span class="home-tile-icon">
+            <svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="12" y="7" width="40" height="50" rx="4"/>
+              <line x1="20" y1="20" x2="44" y2="20"/>
+              <line x1="20" y1="30" x2="44" y2="30"/>
+              <line x1="20" y1="40" x2="34" y2="40"/>
+              <circle cx="41" cy="43" r="7"/>
+              <line x1="41" y1="39" x2="41" y2="43"/>
+              <line x1="41" y1="43" x2="44" y2="45"/>
+            </svg>
+          </span>
+          <span class="home-tile-label">Fahrtenbuch</span>
+        </button>
         <button class="home-tile" onclick="openModule('zeit')">
-          <span class="home-tile-icon">⏱️</span>
+          <span class="home-tile-icon">
+            <svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="32" cy="34" r="22"/>
+              <line x1="32" y1="34" x2="32" y2="20"/>
+              <line x1="32" y1="34" x2="43" y2="34"/>
+              <line x1="32" y1="14" x2="32" y2="17"/>
+              <line x1="32" y1="51" x2="32" y2="54"/>
+              <line x1="15" y1="34" x2="18" y2="34"/>
+              <line x1="46" y1="34" x2="49" y2="34"/>
+            </svg>
+          </span>
           <span class="home-tile-label">Zeitdifferenz</span>
         </button>
       </div>
@@ -735,6 +860,42 @@
 
       <div class="bst-data-stand">Stand: DE 31.08.2026 · AT 30.06.2026</div>
     </div>
+
+    <!-- Modul 5: Fahrtenbuch -->
+    <div id="tab-fahrtenbuch" class="tab-content">
+      <div id="fb-main">
+        <div id="fb-status-box" class="fb-status-box">
+          <div id="fb-status-label" class="fb-status-label">Bereit</div>
+          <div id="fb-status-detail" class="fb-status-detail">Noch keine Aufzeichnung gestartet.</div>
+        </div>
+
+        <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton()">Start</button>
+
+        <div id="fb-log-wrap">
+          <div class="fb-log-header">
+            <span>Heutige Abschnitte</span>
+            <span id="fb-totals" class="fb-totals"></span>
+          </div>
+          <div id="fb-log"></div>
+        </div>
+
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="fbExportReport()">📄 Tagesbericht exportieren (.txt)</button>
+          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Log zurücksetzen</button>
+        </div>
+      </div>
+
+      <!-- Standort-Auswahl (beim Start/Stopp) -->
+      <div id="fb-picker" class="fb-picker" style="display: none;">
+        <div class="fb-picker-title" id="fb-picker-title">Betriebsstelle wählen</div>
+        <div class="form-group">
+          <input type="text" id="fb-picker-search" placeholder="Suchen oder aus der Liste wählen" oninput="fbPickerSearch()" autocomplete="off">
+        </div>
+        <div id="fb-picker-status" class="bst-status-line">Ermittle Standort …</div>
+        <div id="fb-picker-list"></div>
+        <button class="btn-add" onclick="fbClosePicker()">Abbrechen</button>
+      </div>
+    </div>
   </div>
 
   <footer style="text-align: center; margin-top: 20px; font-size: 0.75rem; color: var(--text-muted);">
@@ -755,7 +916,11 @@
       try {
         history.pushState({ module: name }, '', '#' + name);
       } catch (e) { historyApiWorks = false; /* z.B. in sandboxed Vorschauen nicht erlaubt — Modul bleibt trotzdem offen */ }
-      if (name === 'bst') bstEnsureLoaded();
+      if (name === 'bst' || name === 'fahrtenbuch') bstEnsureLoaded();
+      if (name === 'fahrtenbuch') {
+        fbClosePicker();
+        fbRender();
+      }
     }
 
     // Setzt ein Modul auf seinen Ausgangszustand zurück (Eingaben + Ergebnis) —
@@ -826,6 +991,9 @@
         const savedMode = localStorage.getItem("brems_rule_mode");
         if (savedMode) b408SetRuleMode(savedMode);
       } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+
+      // Fahrtenbuch-Log aus vorheriger Sitzung laden
+      fbLoad();
     });
 
     // Rechner 1: Festhaltebremse
@@ -1267,6 +1435,277 @@
         },
         { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
+    }
+
+    // ===== Modul 5: Fahrtenbuch =====
+    // Rein manuell (Start/Stopp-Tasten), keine Hintergrund-Standortverfolgung —
+    // nur beim Tastendruck wird einmalig der Standort abgefragt, um eine
+    // Betriebsstellen-Auswahl vorzuschlagen. Log wird in localStorage gehalten,
+    // damit nichts verloren geht, wenn die App zwischendurch geschlossen wird.
+    // WICHTIG: Dieses Modul wird absichtlich NICHT durch resetModuleState()
+    // zurückgesetzt — eine Schicht soll über mehrere App-Besuche bestehen bleiben.
+    const FB_STORAGE_KEY = 'tfFahrtenbuchLog';
+    let fbLog = [];
+    let fbPickerPurpose = null; // 'start' | 'stopp'
+    let fbPickerCandidates = [];
+
+    function fbLoad() {
+      try {
+        const raw = localStorage.getItem(FB_STORAGE_KEY);
+        fbLog = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        fbLog = [];
+      }
+    }
+
+    function fbSave() {
+      try {
+        localStorage.setItem(FB_STORAGE_KEY, JSON.stringify(fbLog));
+      } catch (e) {
+        console.log('Fahrtenbuch: Speichern fehlgeschlagen', e);
+      }
+    }
+
+    function fbFormatTime(iso) {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function fbFormatDuration(ms) {
+      const totalMin = Math.round(ms / 60000);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
+    }
+
+    function fbCurrentStatus() {
+      if (fbLog.length === 0) return 'idle';
+      return fbLog[fbLog.length - 1].type === 'start' ? 'fahrt' : 'stand';
+    }
+
+    function fbRender() {
+      if (fbLog.length === 0) fbLoad();
+      const status = fbCurrentStatus();
+      const btn = document.getElementById('fb-main-btn');
+      const label = document.getElementById('fb-status-label');
+      const detail = document.getElementById('fb-status-detail');
+
+      if (status === 'idle') {
+        btn.textContent = 'Start';
+        btn.className = 'fb-main-btn fb-btn-start';
+        label.textContent = 'Bereit';
+        detail.textContent = 'Noch keine Aufzeichnung gestartet.';
+      } else if (status === 'fahrt') {
+        const last = fbLog[fbLog.length - 1];
+        btn.textContent = 'Stopp';
+        btn.className = 'fb-main-btn fb-btn-stop';
+        label.textContent = 'Fährt';
+        detail.textContent = `Seit ${fbFormatTime(last.time)} ab ${last.ort.name}`;
+      } else {
+        const last = fbLog[fbLog.length - 1];
+        btn.textContent = 'Start';
+        btn.className = 'fb-main-btn fb-btn-start';
+        label.textContent = 'Steht';
+        detail.textContent = `Seit ${fbFormatTime(last.time)} in ${last.ort.name}`;
+      }
+
+      // Log-Liste (neueste zuerst), Abschnitte aus Start/Stopp-Paaren bilden
+      const logEl = document.getElementById('fb-log');
+      const segments = [];
+      for (let i = 0; i < fbLog.length - 1; i++) {
+        const a = fbLog[i];
+        const b = fbLog[i + 1];
+        segments.push({
+          art: a.type === 'start' ? 'Fahrt' : 'Stand',
+          von: a.ort.name,
+          bis: b.ort.name,
+          zeitVon: a.time,
+          zeitBis: b.time,
+          dauerMs: new Date(b.time) - new Date(a.time)
+        });
+      }
+
+      let fahrzeitMs = 0, stehzeitMs = 0;
+      segments.forEach(s => {
+        if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
+      });
+      document.getElementById('fb-totals').textContent = segments.length
+        ? `Fahrzeit ${fbFormatDuration(fahrzeitMs)} · Stehzeit ${fbFormatDuration(stehzeitMs)}`
+        : '';
+
+      if (segments.length === 0) {
+        logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
+      } else {
+        logEl.innerHTML = segments.slice().reverse().map(s => `
+          <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
+            <div class="fb-log-entry-top">
+              <span>${s.art}</span>
+              <span>${fbFormatDuration(s.dauerMs)}</span>
+            </div>
+            <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    function fbPressButton() {
+      const status = fbCurrentStatus();
+      fbPickerPurpose = (status === 'fahrt') ? 'stopp' : 'start';
+      fbOpenPicker();
+    }
+
+    function fbOpenPicker() {
+      document.getElementById('fb-main').style.display = 'none';
+      document.getElementById('fb-picker').style.display = 'block';
+      document.getElementById('fb-picker-title').textContent =
+        fbPickerPurpose === 'start' ? 'Startort wählen' : 'Stopp-Ort wählen';
+      document.getElementById('fb-picker-search').value = '';
+      document.getElementById('fb-picker-list').innerHTML = '';
+      const statusEl = document.getElementById('fb-picker-status');
+
+      if (!bstData) {
+        statusEl.textContent = 'Betriebsstellen-Datenbank lädt noch, bitte kurz warten …';
+        bstEnsureLoaded();
+      }
+
+      if (!navigator.geolocation) {
+        statusEl.textContent = 'Standortabfrage wird von diesem Browser nicht unterstützt — bitte unten suchen.';
+        return;
+      }
+
+      statusEl.textContent = 'Ermittle Standort …';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!bstData) {
+            statusEl.textContent = 'Datenbank noch nicht geladen — bitte unten suchen oder kurz erneut versuchen.';
+            return;
+          }
+          const userLat = pos.coords.latitude;
+          const userLon = pos.coords.longitude;
+          fbPickerCandidates = bstData
+            .filter(row => row[6] != null && row[7] != null)
+            .map(row => ({ row, dist: bstHaversine(userLat, userLon, row[6], row[7]) }))
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 8);
+          statusEl.textContent = 'Nächstgelegene Betriebsstellen:';
+          fbRenderPickerList(fbPickerCandidates.map(c => c.row), fbPickerCandidates.map(c => c.dist));
+        },
+        (err) => {
+          statusEl.textContent = 'Standort nicht verfügbar — bitte unten suchen.';
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    }
+
+    function fbClosePicker() {
+      document.getElementById('fb-main').style.display = 'block';
+      document.getElementById('fb-picker').style.display = 'none';
+      fbPickerPurpose = null;
+    }
+
+    function fbPickerSearch() {
+      const q = document.getElementById('fb-picker-search').value.trim().toLowerCase();
+      if (!q) {
+        fbRenderPickerList(fbPickerCandidates.map(c => c.row), fbPickerCandidates.map(c => c.dist));
+        return;
+      }
+      if (!bstData) return;
+      const matches = bstData.filter(row => {
+        const [code, name, kurz] = row;
+        return code.toLowerCase().includes(q) || name.toLowerCase().includes(q) || kurz.toLowerCase().includes(q);
+      }).slice(0, 30);
+      fbRenderPickerList(matches, []);
+    }
+
+    let fbPickerRenderedRows = [];
+
+    function fbRenderPickerList(rows, dists) {
+      fbPickerRenderedRows = rows;
+      const listEl = document.getElementById('fb-picker-list');
+      if (rows.length === 0) {
+        listEl.innerHTML = '<div class="bst-empty">Keine Treffer.</div>';
+        return;
+      }
+      listEl.innerHTML = rows.map((row, i) => {
+        const [code, name, kurz, kat, status, land] = row;
+        const distTxt = dists[i] != null ? ` · ${bstFormatDistance(dists[i])}` : '';
+        return `
+          <div class="bst-item" style="cursor: pointer;" onclick="fbSelectOrtByIndex(${i})">
+            <div class="bst-item-top">
+              <span class="bst-code">${bstEscapeHtml(code)}</span>
+              <span class="bst-item-right">
+                <span class="bst-land">${bstFlag(land)}</span>
+                <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+              </span>
+            </div>
+            <div class="bst-name">${bstEscapeHtml(name)}${distTxt}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function fbSelectOrtByIndex(i) {
+      const row = fbPickerRenderedRows[i];
+      if (!row) return;
+      const [code, name] = row;
+      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code, name } });
+      fbSave();
+      fbClosePicker();
+      fbRender();
+    }
+
+    function fbResetLog() {
+      if (!confirm('Fahrtenbuch-Log wirklich komplett löschen?')) return;
+      fbLog = [];
+      fbSave();
+      fbRender();
+    }
+
+    function fbExportReport() {
+      if (fbLog.length < 2) {
+        alert('Noch keine abgeschlossenen Abschnitte zum Exportieren.');
+        return;
+      }
+      const segments = [];
+      for (let i = 0; i < fbLog.length - 1; i++) {
+        const a = fbLog[i];
+        const b = fbLog[i + 1];
+        segments.push({
+          art: a.type === 'start' ? 'Fahrt' : 'Stand',
+          von: a.ort.name,
+          bis: b.ort.name,
+          zeitVon: a.time,
+          zeitBis: b.time,
+          dauerMs: new Date(b.time) - new Date(a.time)
+        });
+      }
+      let fahrzeitMs = 0, stehzeitMs = 0;
+      segments.forEach(s => {
+        if (s.art === 'Fahrt') fahrzeitMs += s.dauerMs; else stehzeitMs += s.dauerMs;
+      });
+
+      const heute = new Date();
+      const datumStr = heute.toLocaleDateString('de-DE');
+      let text = `Tagesbericht Fahrtenbuch — ${datumStr}\n`;
+      text += `Tf-Assistent, ${window.location.href}\n`;
+      text += '='.repeat(40) + '\n\n';
+      segments.forEach(s => {
+        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
+      });
+      text += '\n' + '-'.repeat(40) + '\n';
+      text += `Gesamt-Fahrzeit:  ${fbFormatDuration(fahrzeitMs)}\n`;
+      text += `Gesamt-Stehzeit:  ${fbFormatDuration(stehzeitMs)}\n`;
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateForFile = heute.toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `Tagesbericht_${dateForFile}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function bstFetchJson(url) {
