@@ -1614,13 +1614,15 @@
         for (let i = 0; i < entries.length - 1; i++) {
           const a = entries[i];
           const b = entries[i + 1];
+          const dauerMs = new Date(b.time) - new Date(a.time);
+          if (dauerMs <= 0) continue; // z.B. direkte Ankunft ohne Weiterfahrt — kein eigener Eintrag nötig
           segments.push({
             art: a.type === 'start' ? 'Fahrt' : 'Stand',
             von: a.ort.code,
             bis: b.ort.code,
             zeitVon: a.time,
             zeitBis: b.time,
-            dauerMs: new Date(b.time) - new Date(a.time)
+            dauerMs
           });
         }
         let fahrzeitMs = 0, stehzeitMs = 0;
@@ -1735,12 +1737,21 @@
         fbRender();
         return;
       }
+      // 'beenden': du stehst schon seit dem letzten Stopp (sonst hättest du ja
+      // "Weiterfahrt" gedrückt) — die eigentliche Ankunftszeit UND der Ort sind
+      // also bereits der letzte Stopp, nicht der Moment des Tastendrucks.
+      // Übernimmt deshalb genau wie "Weiterfahrt" direkt, ohne Picker.
+      if (action === 'beenden') {
+        const last = fbLog[fbLog.length - 1];
+        fbLog.push({ type: 'ende', time: last.time, ort: last.ort });
+        fbSave();
+        fbRender();
+        return;
+      }
       // 'abfahrt' -> neuer 'start'-Eintrag (neue Schicht beginnt, Ort unbekannt -> Auswahl)
       // 'stopp' -> 'stopp'-Eintrag (Fahrt endet, Stand beginnt, Schicht läuft weiter)
-      // 'beenden' -> 'ende'-Eintrag (Stand endet, Schicht wird geschlossen)
       if (action === 'abfahrt') fbPickerPurpose = 'start';
       else if (action === 'stopp') fbPickerPurpose = 'stopp';
-      else if (action === 'beenden') fbPickerPurpose = 'ende';
       fbOpenPicker();
     }
 
