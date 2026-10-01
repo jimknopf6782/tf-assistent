@@ -111,6 +111,17 @@
       text-align: center;
     }
 
+    .home-tile-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--input-bg);
+    }
+
     .home-tile:active {
       background-color: rgba(220, 38, 38, 0.12);
       border-color: var(--accent);
@@ -588,15 +599,23 @@
 
     .fb-log-header {
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
+      flex-direction: column;
+      gap: 3px;
       font-size: 0.8rem;
       color: var(--text-muted);
       margin-bottom: 8px;
     }
 
+    .fb-log-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-weight: 600;
+      color: var(--text);
+    }
+
     .fb-totals {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
     }
 
     .fb-log-entry {
@@ -729,7 +748,8 @@
           </span>
           <span class="home-tile-label">Betriebsstellen</span>
         </button>
-        <button class="home-tile" onclick="openModule('fahrtenbuch')">
+        <button class="home-tile" style="position: relative;" onclick="openModule('fahrtenbuch')">
+          <span id="fb-badge" class="home-tile-badge" style="display: none;"></span>
           <span class="home-tile-icon">
             <svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
               <rect x="12" y="7" width="40" height="50" rx="4"/>
@@ -926,8 +946,11 @@
 
         <div id="fb-log-wrap">
           <div class="fb-log-header">
-            <span id="fb-log-title">Aktuelle Schicht</span>
-            <span id="fb-totals" class="fb-totals"></span>
+            <div class="fb-log-header-top">
+              <span id="fb-log-title">Aktuelle Schicht</span>
+              <span id="fb-gesamtzeit"></span>
+            </div>
+            <div id="fb-totals" class="fb-totals"></div>
           </div>
           <div id="fb-log"></div>
         </div>
@@ -1029,6 +1052,7 @@
       document.getElementById('home-screen').classList.add('active');
       document.getElementById('module-back-row').style.display = 'none';
       currentModule = null;
+      fbUpdateBadge();
     }
 
     // Hardware-/Gesten-Zurück-Taste: geht ins Hauptmenü statt die App zu verlassen
@@ -1057,6 +1081,7 @@
 
       // Fahrtenbuch-Log aus vorheriger Sitzung laden
       fbLoad();
+      fbUpdateBadge();
     });
 
     // Rechner 1: Festhaltebremse
@@ -1561,6 +1586,14 @@
       return lastType === 'start' ? 'fahrt' : 'stand';
     }
 
+    // Roter Punkt auf der Fahrtenbuch-Kachel im Hauptmenü, solange eine
+    // Schicht offen ist (egal ob gerade gefahren oder gestanden wird).
+    function fbUpdateBadge() {
+      const badge = document.getElementById('fb-badge');
+      if (!badge) return;
+      badge.style.display = fbCurrentStatus() !== 'idle' ? 'block' : 'none';
+    }
+
     // Zerlegt das Log in einzelne Schichten. Eine Schicht beginnt direkt nach
     // einem 'ende'-Eintrag (oder am Log-Anfang) und läuft bis zum nächsten
     // 'ende' (geschlossen) oder bis zum Log-Ende (offen, noch laufend).
@@ -1583,8 +1616,8 @@
           const b = entries[i + 1];
           segments.push({
             art: a.type === 'start' ? 'Fahrt' : 'Stand',
-            von: a.ort.name,
-            bis: b.ort.name,
+            von: a.ort.code,
+            bis: b.ort.code,
             zeitVon: a.time,
             zeitBis: b.time,
             dauerMs: new Date(b.time) - new Date(a.time)
@@ -1608,6 +1641,7 @@
 
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
+      fbUpdateBadge();
       const status = fbCurrentStatus();
       const singleRow = document.getElementById('fb-btn-row-single');
       const doubleRow = document.getElementById('fb-btn-row-double');
@@ -1631,13 +1665,13 @@
         mainBtn.className = 'fb-main-btn fb-btn-stop';
         mainBtn.onclick = () => fbPressButton('stopp');
         label.textContent = 'Fährt';
-        detail.textContent = `Seit ${fbFormatTime(last.time)} ab ${last.ort.name}`;
+        detail.textContent = `Seit ${fbFormatTime(last.time)} ab ${last.ort.code}`;
       } else {
         singleRow.style.display = 'none';
         doubleRow.style.display = 'block';
         const last = fbLog[fbLog.length - 1];
         label.textContent = 'Steht';
-        detail.textContent = `Seit ${fbFormatTime(last.time)} in ${last.ort.name}`;
+        detail.textContent = `Seit ${fbFormatTime(last.time)} in ${last.ort.code}`;
       }
 
       const shifts = fbBuildShifts();
@@ -1651,9 +1685,12 @@
       if (!currentShift || currentShift.segments.length === 0) {
         logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
         document.getElementById('fb-totals').textContent = '';
+        document.getElementById('fb-gesamtzeit').textContent = '';
       } else {
+        document.getElementById('fb-gesamtzeit').textContent =
+          fbFormatDuration(currentShift.fahrzeitMs + currentShift.stehzeitMs);
         document.getElementById('fb-totals').textContent =
-          `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Stehzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
+          `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Standzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
         logEl.innerHTML = currentShift.segments.slice().reverse().map(s => `
           <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
             <div class="fb-log-entry-top">
@@ -1680,7 +1717,7 @@
                 <span>${vonTxt} → ${bisTxt}</span>
                 <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})">Exportieren</button>
               </div>
-              <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Stehzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
+              <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
             </div>
           `;
         }).join('');
@@ -1840,7 +1877,7 @@
       });
       text += '\n' + '-'.repeat(40) + '\n';
       text += `Fahrzeit:  ${fbFormatDuration(shift.fahrzeitMs)}\n`;
-      text += `Stehzeit:  ${fbFormatDuration(shift.stehzeitMs)}\n`;
+      text += `Standzeit: ${fbFormatDuration(shift.stehzeitMs)}\n`;
       if (shift.open) text += '\n(Schicht noch nicht beendet — Stand bei Export)\n';
 
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
