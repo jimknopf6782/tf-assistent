@@ -1688,10 +1688,20 @@
     }
 
     function fbPressButton(action) {
-      // 'abfahrt'/'weiterfahrt' -> neuer 'start'-Eintrag (Fahrt beginnt)
+      // 'weiterfahrt': du stehst an Ort A und fährst von dort wieder los —
+      // der Ort ist schon bekannt (der Stopp-Ort), also keine neue
+      // Standortabfrage/Auswahl nötig. Direkt als 'start'-Eintrag übernehmen.
+      if (action === 'weiterfahrt') {
+        const last = fbLog[fbLog.length - 1];
+        fbLog.push({ type: 'start', time: new Date().toISOString(), ort: last.ort });
+        fbSave();
+        fbRender();
+        return;
+      }
+      // 'abfahrt' -> neuer 'start'-Eintrag (neue Schicht beginnt, Ort unbekannt -> Auswahl)
       // 'stopp' -> 'stopp'-Eintrag (Fahrt endet, Stand beginnt, Schicht läuft weiter)
       // 'beenden' -> 'ende'-Eintrag (Stand endet, Schicht wird geschlossen)
-      if (action === 'abfahrt' || action === 'weiterfahrt') fbPickerPurpose = 'start';
+      if (action === 'abfahrt') fbPickerPurpose = 'start';
       else if (action === 'stopp') fbPickerPurpose = 'stopp';
       else if (action === 'beenden') fbPickerPurpose = 'ende';
       fbOpenPicker();
