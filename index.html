@@ -455,7 +455,7 @@
       margin-top: 10px;
       font-size: 0.75rem;
       color: var(--text-muted);
-      text-align: center;
+      text-align: left;
     }
 
     .badge-info {
@@ -883,7 +883,6 @@
       <div id="b408-result-card" class="result-card">
         <div class="result-title">Vorhandene Bremsprozente</div>
         <div id="b408-res-prozent" class="result-main">0 %</div>
-        <div id="b408-res-mode-badge" class="badge-info">P/R-Zug</div>
 
         <div class="result-grid">
           <div class="result-item">
@@ -911,7 +910,7 @@
           </div>
         </div>
 
-        <div class="result-longabzug" id="b408-res-abzug-row">Längenabzug (nur auf P-Anteil): <span id="b408-res-abzug">0 %</span></div>
+        <div class="result-longabzug" id="b408-res-abzug-row"></div>
       </div>
     </div>
 
@@ -1355,13 +1354,12 @@
       let wagenBremsEffektiv = 0;
       let lokBremsEffektiv = 0;
       let wirksamesBremsgewicht = 0;
-      let modeText = "";
+      let hatGAnteil = false;
 
       if (isReinerGZug) {
         wagenBremsEffektiv = wagenG;
         lokBremsEffektiv = lokBremsG_Raw;
         wirksamesBremsgewicht = wagenBremsEffektiv + lokBremsEffektiv;
-        modeText = "Durchgehend G (Keine Abzüge)";
         laengenAbzugProzent = 0;
       } else {
         // Längenabzug ermitteln (Gilt NUR auf P-Bremsgewichte), je nach Regel-Modus
@@ -1392,25 +1390,26 @@
         lokBremsEffektiv = lokPEffektiv + lokGEffektiv;
         wirksamesBremsgewicht = wagenBremsEffektiv + lokBremsEffektiv;
 
-        const ruleTag = (b408CurrentRuleMode === "EVU") ? " BRW-EVU" : "";
-        if (wagenG > 0 || lokBremsG_Raw > 0) {
-          modeText = `Mischstellung${ruleTag} (G mit -25% Abzug)`;
-        } else {
-          modeText = `Reiner P/R-Zug${ruleTag}`;
-        }
+        hatGAnteil = (wagenG > 0 || lokBremsG_Raw > 0);
       }
 
       const bremsProzent = Math.floor((wirksamesBremsgewicht / gesamtMasse) * 100);
 
       document.getElementById("b408-res-prozent").innerText = `${bremsProzent} %`;
-      document.getElementById("b408-res-mode-badge").innerText = modeText;
       document.getElementById("b408-res-laenge").innerText = `${gesamtLaenge} m`;
       document.getElementById("b408-res-masse").innerText = `${gesamtMasse} t`;
       document.getElementById("b408-res-brems-wagen").innerText = `${wagenBremsEffektiv} t`;
       document.getElementById("b408-res-brems-lok").innerText = `${lokBremsEffektiv} t`;
       document.getElementById("b408-res-bremsgewicht").innerText = `${wirksamesBremsgewicht} t`;
-      document.getElementById("b408-res-abzug").innerText = `${laengenAbzugProzent} %`;
-      document.getElementById("b408-res-abzug-row").style.display = isReinerGZug ? "none" : "block";
+
+      // Abzüge-Zeile: G ist immer pauschal 25%, Länge ist dynamisch — beide
+      // parallel formatiert (Wert zuerst, dann Kennzeichen in Klammern).
+      const abzugRow = document.getElementById("b408-res-abzug-row");
+      const teile = [];
+      if (hatGAnteil) teile.push("25 % (G)");
+      if (!isReinerGZug) teile.push(`${laengenAbzugProzent} % Länge (P)`);
+      abzugRow.innerText = teile.length ? `Abzüge: ${teile.join(" · ")}` : "";
+      abzugRow.style.display = teile.length ? "block" : "none";
 
       const resultCard = document.getElementById("b408-result-card");
       resultCard.classList.add("visible");
