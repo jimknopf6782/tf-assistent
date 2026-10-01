@@ -77,13 +77,32 @@
     }
 
     header {
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
       margin-bottom: 20px;
+      min-height: 32px;
     }
 
     h1 {
       font-size: 1.5rem;
       color: var(--accent);
+      text-align: center;
+    }
+
+    #header-back-btn {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 1.6rem;
+      line-height: 1;
+      padding: 4px 10px 4px 0;
+      cursor: pointer;
     }
 
     /* Startbildschirm: Kachel-Navigation */
@@ -697,12 +716,9 @@
 
   <div class="container">
     <header>
-      <h1>Tf-Assistent</h1>
+      <button id="header-back-btn" style="display: none;" onclick="goHome()">‹</button>
+      <h1 id="app-header-title">Tf-Assistent</h1>
     </header>
-
-    <div id="module-back-row" style="display: none; margin-bottom: 14px;">
-    <button class="btn-add" onclick="historyApiWorks ? history.back() : goHome()">‹ Zurück zum Menü</button>
-    </div>
 
     <!-- Startbildschirm: Kachel-Navigation -->
     <div id="home-screen" class="tab-content active">
@@ -782,27 +798,19 @@
 
     <!-- Modul 1: Festhaltebremse -->
     <div id="tab-bremse" class="tab-content">
+      <div id="result-bremse" class="result-box" style="margin-bottom: 18px;">
+        <div class="result-title">Erforderliche Festhaltekraft</div>
+        <div id="bremse-wert" class="result-value">-</div>
+      </div>
+
       <div class="form-group">
         <label for="zuggewicht">Zuggewicht (in Tonnen):</label>
-        <input type="number" id="zuggewicht" placeholder="z. B. 1200" oninput="berechneBremse()">
+        <input type="number" id="zuggewicht" placeholder="z. B. 1200" oninput="berechneBremse()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('neigung').focus();}">
       </div>
 
       <div class="form-group">
         <label for="neigung">Maßgebende Neigung (in ‰)</label>
-        <input type="number" id="neigung" placeholder="2,5" oninput="berechneBremse()">
-      </div>
-
-      <div id="result-bremse" class="result-box">
-        <div class="result-title">Erforderliche Bremskraft</div>
-        <div id="bremse-wert" class="result-value">-</div>
-      </div>
-
-      <div style="margin-top: 14px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.5;">
-        <strong>Berechnungsgrundlage:</strong><br>
-        Gefälle: F_park,Sf = (m · 9,81 · i / 1000) · 1,5<br>
-        Wind: F_park,wind = (25 · m / 1000) + (m · 9,81 · i / 1000)<br>
-        Maßgebend ist der größere Wert, kaufmännisch aufgerundet auf volle kN.<br>
-        Keine Gewähr – im Zweifel gilt die betriebliche Bremstabelle.
+        <input type="number" id="neigung" placeholder="2,5" oninput="berechneBremse()" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
       </div>
     </div>
 
@@ -846,22 +854,22 @@
 
         <div class="form-group">
           <label for="b408-wagen-gewicht">Wagenzuggewicht (t)</label>
-          <input type="number" id="b408-wagen-gewicht" placeholder="z. B. 950" inputmode="numeric" oninput="b408AutoCheckMass()">
+          <input type="number" id="b408-wagen-gewicht" placeholder="z. B. 950" inputmode="numeric" oninput="b408AutoCheckMass()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-laenge').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-laenge">Wagenzuglänge (m)</label>
-          <input type="number" id="b408-wagen-laenge" placeholder="z. B. 520" inputmode="decimal">
+          <input type="number" id="b408-wagen-laenge" placeholder="z. B. 520" inputmode="decimal" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-p').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-p">Bremsgewicht Wagenzug P (t)</label>
-          <input type="number" id="b408-wagen-p" placeholder="z. B. 820" inputmode="numeric">
+          <input type="number" id="b408-wagen-p" placeholder="z. B. 820" inputmode="numeric" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-g').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-g">Bremsgewicht Wagenzug G (t)</label>
-          <input type="number" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric">
+          <input type="number" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
         </div>
 
         <div class="rule-switcher">
@@ -937,11 +945,11 @@
         </div>
 
         <div id="fb-btn-row-single">
-          <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Abfahrt</button>
+          <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Starten</button>
         </div>
         <div id="fb-btn-row-double" style="display: none;">
-          <button class="fb-main-btn fb-btn-start" style="margin-bottom: 10px;" onclick="fbPressButton('weiterfahrt')">Weiterfahrt</button>
-          <button class="fb-main-btn fb-btn-end" onclick="fbPressButton('beenden')">Ankunft</button>
+          <button class="fb-main-btn fb-btn-start" style="margin-bottom: 10px;" onclick="fbPressButton('weiterfahrt')">Fortsetzen</button>
+          <button class="fb-main-btn fb-btn-end" onclick="fbPressButton('beenden')">Beenden</button>
         </div>
 
         <div id="fb-log-wrap">
@@ -994,10 +1002,19 @@
     let currentModule = null;
     let historyApiWorks = true;
 
+    const MODULE_TITLES = {
+      brems408: 'Bremsberechnung',
+      bremse: 'Festhaltekraft',
+      bst: 'Betriebsstellen',
+      zeit: 'Zeitdifferenz',
+      fahrtenbuch: 'Fahrtenbuch'
+    };
+
     function openModule(name) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
-      document.getElementById('module-back-row').style.display = 'block';
+      document.getElementById('header-back-btn').style.display = 'inline-block';
+      document.getElementById('app-header-title').textContent = MODULE_TITLES[name] || 'Tf-Assistent';
       currentModule = name;
       try {
         history.pushState({ module: name }, '', '#' + name);
@@ -1050,7 +1067,8 @@
       if (currentModule) resetModuleState(currentModule);
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('home-screen').classList.add('active');
-      document.getElementById('module-back-row').style.display = 'none';
+      document.getElementById('header-back-btn').style.display = 'none';
+      document.getElementById('app-header-title').textContent = 'Tf-Assistent';
       currentModule = null;
       fbUpdateBadge();
     }
@@ -1654,7 +1672,7 @@
       if (status === 'idle') {
         singleRow.style.display = 'block';
         doubleRow.style.display = 'none';
-        mainBtn.textContent = 'Abfahrt';
+        mainBtn.textContent = 'Starten';
         mainBtn.className = 'fb-main-btn fb-btn-start';
         mainBtn.onclick = () => fbPressButton('abfahrt');
         label.textContent = 'Bereit';
@@ -1663,7 +1681,7 @@
         singleRow.style.display = 'block';
         doubleRow.style.display = 'none';
         const last = fbLog[fbLog.length - 1];
-        mainBtn.textContent = 'Stopp';
+        mainBtn.textContent = 'Pause';
         mainBtn.className = 'fb-main-btn fb-btn-stop';
         mainBtn.onclick = () => fbPressButton('stopp');
         label.textContent = 'Fährt';
@@ -1758,7 +1776,7 @@
     function fbOpenPicker() {
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-picker').style.display = 'block';
-      const titles = { start: 'Ort wählen', stopp: 'Stopp-Ort wählen', ende: 'End-Ort der Schicht wählen' };
+      const titles = { start: 'Ort wählen', stopp: 'Pause-Ort wählen', ende: 'End-Ort der Schicht wählen' };
       document.getElementById('fb-picker-title').textContent = titles[fbPickerPurpose] || 'Betriebsstelle wählen';
       document.getElementById('fb-picker-search').value = '';
       document.getElementById('fb-picker-list').innerHTML = '';
