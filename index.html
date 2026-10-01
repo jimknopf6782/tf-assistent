@@ -1546,7 +1546,7 @@
     }
 
     function fbFormatDuration(ms) {
-      const totalMin = Math.round(ms / 60000);
+      const totalMin = Math.ceil(ms / 60000);
       const h = Math.floor(totalMin / 60);
       const m = totalMin % 60;
       return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
