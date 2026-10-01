@@ -805,12 +805,12 @@
 
       <div class="form-group">
         <label for="zuggewicht">Zuggewicht (in Tonnen):</label>
-        <input type="number" id="zuggewicht" placeholder="z. B. 1200" oninput="berechneBremse()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('neigung').focus();}">
+        <input type="text" inputmode="numeric" id="zuggewicht" placeholder="z. B. 1200" oninput="berechneBremse()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('neigung').focus();}">
       </div>
 
       <div class="form-group">
         <label for="neigung">Maßgebende Neigung (in ‰)</label>
-        <input type="number" id="neigung" placeholder="2,5" oninput="berechneBremse()" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
+        <input type="text" inputmode="decimal" id="neigung" placeholder="2,5" oninput="berechneBremse()" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
       </div>
     </div>
 
@@ -854,22 +854,22 @@
 
         <div class="form-group">
           <label for="b408-wagen-gewicht">Wagenzuggewicht (t)</label>
-          <input type="number" id="b408-wagen-gewicht" placeholder="z. B. 950" inputmode="numeric" oninput="b408AutoCheckMass()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-laenge').focus();}">
+          <input type="text" id="b408-wagen-gewicht" placeholder="z. B. 950" inputmode="numeric" oninput="b408AutoCheckMass()" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-laenge').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-laenge">Wagenzuglänge (m)</label>
-          <input type="number" id="b408-wagen-laenge" placeholder="z. B. 520" inputmode="decimal" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-p').focus();}">
+          <input type="text" id="b408-wagen-laenge" placeholder="z. B. 520" inputmode="decimal" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-p').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-p">Bremsgewicht Wagenzug P (t)</label>
-          <input type="number" id="b408-wagen-p" placeholder="z. B. 820" inputmode="numeric" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-g').focus();}">
+          <input type="text" id="b408-wagen-p" placeholder="z. B. 820" inputmode="numeric" enterkeyhint="next" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('b408-wagen-g').focus();}">
         </div>
 
         <div class="form-group">
           <label for="b408-wagen-g">Bremsgewicht Wagenzug G (t)</label>
-          <input type="number" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
+          <input type="text" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
         </div>
 
         <div class="rule-switcher">
@@ -911,7 +911,7 @@
           </div>
         </div>
 
-        <div class="result-longabzug">Längenabzug: <span id="b408-res-abzug">0 %</span></div>
+        <div class="result-longabzug" id="b408-res-abzug-row">Längenabzug (nur auf P-Anteil): <span id="b408-res-abzug">0 %</span></div>
       </div>
     </div>
 
@@ -941,7 +941,11 @@
       <div id="fb-main">
         <div id="fb-status-box" class="fb-status-box">
           <div id="fb-status-label" class="fb-status-label">Bereit</div>
-          <div id="fb-status-detail" class="fb-status-detail">Noch keine Schicht begonnen.</div>
+          <div id="fb-status-detail" class="fb-status-detail">Noch keine Fahrt begonnen.</div>
+        </div>
+
+        <div class="bst-data-stand" style="margin-top: -10px; margin-bottom: 18px;">
+          Fahrzeit = Rangier-/Verschubfahrt + Zugfahrt inkl. Unterwegshalt bis 5 Minuten (Zeit bis Nachfrage) + Halt mit Info „Geht gleich weiter“
         </div>
 
         <div id="fb-btn-row-single">
@@ -977,6 +981,7 @@
         <div class="fb-footer-actions">
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
         </div>
+
       </div>
 
       <!-- Standort-Auswahl (beim Abfahrt/Stopp/Weiterfahrt/Beenden) -->
@@ -1405,6 +1410,7 @@
       document.getElementById("b408-res-brems-lok").innerText = `${lokBremsEffektiv} t`;
       document.getElementById("b408-res-bremsgewicht").innerText = `${wirksamesBremsgewicht} t`;
       document.getElementById("b408-res-abzug").innerText = `${laengenAbzugProzent} %`;
+      document.getElementById("b408-res-abzug-row").style.display = isReinerGZug ? "none" : "block";
 
       const resultCard = document.getElementById("b408-result-card");
       resultCard.classList.add("visible");
@@ -1676,7 +1682,7 @@
         mainBtn.className = 'fb-main-btn fb-btn-start';
         mainBtn.onclick = () => fbPressButton('abfahrt');
         label.textContent = 'Bereit';
-        detail.textContent = 'Noch keine Schicht begonnen.';
+        detail.textContent = 'Noch keine Fahrt begonnen.';
       } else if (status === 'fahrt') {
         singleRow.style.display = 'block';
         doubleRow.style.display = 'none';
