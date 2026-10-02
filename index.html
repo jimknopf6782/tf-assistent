@@ -1052,6 +1052,16 @@
   </footer>
 
   <script>
+    // Zahlen-Eingaben sollen sowohl "5.9" als auch das deutsche "5,9" verstehen —
+    // parseFloat() allein bricht bei einem Komma ab und liefert nur den
+    // Teil davor (z.B. aus "5,9" wird 5), was Berechnungen bis zur nächsten
+    // vollen Zahl konstant hält. Deshalb überall num() statt parseFloat()
+    // auf Nutzereingaben verwenden.
+    function num(value) {
+      if (typeof value !== 'string') return parseFloat(value);
+      return parseFloat(value.replace(',', '.'));
+    }
+
     // Kachel-Navigation: ein Modul öffnen, Zurück-Leiste einblenden,
     // History-Eintrag setzen, damit die Zurück-Taste ins Menü statt aus der App führt.
     let currentModule = null;
@@ -1160,8 +1170,8 @@
 
     // Rechner 1: Festhaltebremse
     function berechneBremse() {
-      const gewicht = parseFloat(document.getElementById('zuggewicht').value);
-      let neigung = parseFloat(document.getElementById('neigung').value);
+      const gewicht = num(document.getElementById('zuggewicht').value);
+      let neigung = num(document.getElementById('neigung').value);
       const resultBox = document.getElementById('result-bremse');
       const resultVal = document.getElementById('bremse-wert');
 
@@ -1294,7 +1304,7 @@
     function b408SetLokMass(id, massValue) {
       const lok = b408Loks.find(l => l.id === id);
       if (lok) {
-        lok.mass = parseFloat(massValue) || 0;
+        lok.mass = num(massValue) || 0;
         b408AutoCheckMass();
       }
     }
@@ -1394,7 +1404,7 @@
     // Keine Sperre: der Nutzer kann danach jederzeit manuell auf G/P/R wechseln,
     // die Automatik greift nur erneut, wenn sich das Zuggewicht ändert.
     function b408AutoCheckMass() {
-      const wagenMasse = parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0;
+      const wagenMasse = num(document.getElementById("b408-wagen-gewicht").value) || 0;
       const zielPos = wagenMasse > 800 ? "G" : "P";
 
       b408Loks.forEach(l => {
@@ -1404,10 +1414,10 @@
     }
 
     function b408CalculateBrakes() {
-      const wagenGewicht = Math.ceil(parseFloat(document.getElementById("b408-wagen-gewicht").value) || 0);
-      const wagenLaengeInput = parseFloat(document.getElementById("b408-wagen-laenge").value) || 0;
-      const wagenP = Math.floor(parseFloat(document.getElementById("b408-wagen-p").value) || 0);
-      const wagenG = Math.floor(parseFloat(document.getElementById("b408-wagen-g").value) || 0);
+      const wagenGewicht = Math.ceil(num(document.getElementById("b408-wagen-gewicht").value) || 0);
+      const wagenLaengeInput = num(document.getElementById("b408-wagen-laenge").value) || 0;
+      const wagenP = Math.floor(num(document.getElementById("b408-wagen-p").value) || 0);
+      const wagenG = Math.floor(num(document.getElementById("b408-wagen-g").value) || 0);
 
       // Grundsatz: Längen nach OBEN runden
       const wagenLaenge = Math.ceil(wagenLaengeInput);
@@ -1420,7 +1430,7 @@
 
       b408Loks.forEach(l => {
         const data = B408_LOK_DB[l.type];
-        lokGewichtGesamt += Math.ceil(parseFloat(l.mass) || 0);
+        lokGewichtGesamt += Math.ceil(num(l.mass) || 0);
         lokLuepGesamt += data.luep;
 
         if (l.pos === "G") {
