@@ -1302,10 +1302,14 @@
     }
 
     function b408SetLokMass(id, massValue) {
+      // Bewusst KEIN b408RenderLoks()/b408AutoCheckMass() hier — das würde bei
+      // jedem Tastendruck das komplette Lok-Karussell neu aufbauen, den Fokus
+      // (Tastatur) killen und die Scroll-Position auf Lok 1 zurückspringen
+      // lassen. Lokgewicht beeinflusst die G/P-Automatik ohnehin nicht (die
+      // hängt nur am Wagenzuggewicht) — ein einfaches Datenupdate reicht.
       const lok = b408Loks.find(l => l.id === id);
       if (lok) {
         lok.mass = num(massValue) || 0;
-        b408AutoCheckMass();
       }
     }
 
