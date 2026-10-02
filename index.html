@@ -1012,6 +1012,7 @@
               <span id="fb-gesamtzeit"></span>
             </div>
             <div id="fb-totals" class="fb-totals"></div>
+            <div id="fb-route" class="fb-totals"></div>
           </div>
           <div id="fb-log"></div>
         </div>
@@ -1803,15 +1804,19 @@
         currentShift && currentShift.open ? 'Aktuelle Schicht' : 'Letzte Schicht';
 
       const logEl = document.getElementById('fb-log');
+      const routeEl = document.getElementById('fb-route');
       if (!currentShift || currentShift.segments.length === 0) {
         logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
         document.getElementById('fb-totals').textContent = '';
         document.getElementById('fb-gesamtzeit').textContent = '';
+        routeEl.textContent = '';
       } else {
         document.getElementById('fb-gesamtzeit').textContent =
           fbFormatDuration(currentShift.fahrzeitMs + currentShift.stehzeitMs);
         document.getElementById('fb-totals').textContent =
           `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Standzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
+        const lastEntry = currentShift.entries[currentShift.entries.length - 1];
+        routeEl.textContent = `${currentShift.start.ort.name} → ${lastEntry.ort.name}`;
         logEl.innerHTML = currentShift.segments.slice().reverse().map(s => `
           <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
             <div class="fb-log-entry-top">
@@ -1832,12 +1837,15 @@
           const realIndex = shifts.length - 2 - idx; // Index in "shifts" (chronologisch)
           const vonTxt = fbFormatDateTime(shift.start.time);
           const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
+          const lastEntry = shift.entries[shift.entries.length - 1];
+          const routeTxt = `${shift.start.ort.name} → ${lastEntry.ort.name}`;
           return `
             <div class="fb-shift-entry">
               <div class="fb-shift-entry-top">
                 <span>${vonTxt} → ${bisTxt}</span>
                 <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})">Exportieren</button>
               </div>
+              <div class="fb-shift-entry-detail">${routeTxt}</div>
               <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
             </div>
           `;
@@ -1998,8 +2006,11 @@
 
       const vonTxt = fbFormatDateTime(shift.start.time);
       const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
+      const lastEntry = shift.entries[shift.entries.length - 1];
+      const routeTxt = `${shift.start.ort.name} → ${lastEntry.ort.name}`;
 
       let text = `Schichtbericht — ${vonTxt} bis ${bisTxt}\n`;
+      text += `Strecke: ${routeTxt}\n`;
       text += `Tf-Assistent, ${window.location.href}\n`;
       text += '='.repeat(40) + '\n\n';
       shift.segments.forEach(s => {
