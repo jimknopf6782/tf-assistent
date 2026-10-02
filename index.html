@@ -295,16 +295,66 @@
       align-items: center;
     }
 
+    .lok-carousel {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 10px;
+      margin: 0 -2px;
+      padding: 2px;
+    }
+
+    .lok-carousel::-webkit-scrollbar {
+      display: none;
+    }
+
     .lok-item {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 10px;
-      margin-bottom: 10px;
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      box-sizing: border-box;
     }
 
-    .lok-item:last-child {
-      margin-bottom: 0;
+    .lok-add-card {
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      min-height: 180px;
+      color: var(--accent);
+      cursor: pointer;
+      background: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .lok-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .lok-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .lok-dot.active {
+      background: var(--accent);
     }
 
     .lok-header {
@@ -844,9 +894,8 @@
           <span id="b408-lok-count" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">1 / 3</span>
         </div>
 
-        <div id="b408-lok-container"></div>
-
-        <button id="b408-btn-add-lok" class="btn-add" onclick="b408AddLok()">+ Weitere Lok hinzufügen</button>
+        <div id="b408-lok-container" class="lok-carousel"></div>
+        <div id="b408-lok-dots" class="lok-dots"></div>
       </div>
 
       <div class="section-card">
@@ -869,9 +918,10 @@
 
         <div class="form-group">
           <label for="b408-wagen-g">Bremsgewicht Wagenzug G (t)</label>
-          <input type="text" id="b408-wagen-g" placeholder="z. B. 0 (falls vorhanden)" inputmode="numeric" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
+          <input type="text" id="b408-wagen-g" placeholder="z. B. 150" inputmode="numeric" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()">
         </div>
 
+        <label style="display: block; margin-bottom: 6px;">Methode für Längenabzug</label>
         <div class="rule-switcher">
           <button id="b408-rule-ril" class="rule-btn active" onclick="b408SetRuleMode('RIL')">Ril 408</button>
           <button id="b408-rule-evu" class="rule-btn" onclick="b408SetRuleMode('EVU')">BRW-EVU</button>
@@ -1094,6 +1144,7 @@
 
       // Bremsberechnung: erste Lok anlegen
       b408AddLok();
+      document.getElementById('b408-lok-container').addEventListener('scroll', b408CarouselScrolled);
 
       // Gespeicherten Regel-Modus (Ril 408 / BRW-EVU) wiederherstellen
       try {
@@ -1214,13 +1265,19 @@
       });
       b408RenderLoks();
       b408AutoCheckMass();
+      const container = document.getElementById("b408-lok-container");
+      const newIndex = b408Loks.length - 1;
+      b408LastActiveIndex = newIndex;
+      container.scrollTo({ left: newIndex * container.clientWidth, behavior: 'smooth' });
     }
 
     function b408RemoveLok(id) {
       if (b408Loks.length <= 1) return;
       b408Loks = b408Loks.filter(l => l.id !== id);
+      b408LastActiveIndex = 0;
       b408RenderLoks();
       b408AutoCheckMass();
+      document.getElementById('b408-lok-container').scrollTo({ left: 0, behavior: 'smooth' });
     }
 
     function b408SetLokType(id, type) {
@@ -1287,8 +1344,47 @@
         container.appendChild(lokElement);
       });
 
+      // Add-Lok-Karte ans Ende hängen, solange die Obergrenze (3) nicht erreicht ist
+      if (b408Loks.length < 3) {
+        const addCard = document.createElement("div");
+        addCard.className = "lok-add-card";
+        addCard.onclick = b408AddLok;
+        addCard.innerHTML = `
+          <svg viewBox="0 0 64 64" width="36" height="36" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="10" y="22" width="36" height="18" rx="3"/>
+            <rect x="18" y="12" width="14" height="10" rx="2"/>
+            <circle cx="20" cy="44" r="4"/>
+            <circle cx="36" cy="44" r="4"/>
+            <line x1="46" y1="30" x2="54" y2="30"/>
+          </svg>
+          <span>+ Lok hinzufügen</span>
+        `;
+        container.appendChild(addCard);
+      }
+
+      // Punkte-Indikator (eine pro Lok, nicht für die Add-Karte)
+      const dotsEl = document.getElementById("b408-lok-dots");
+      dotsEl.innerHTML = b408Loks.map((_, i) => `<span class="lok-dot ${i === b408LastActiveIndex ? 'active' : ''}"></span>`).join('');
+
       document.getElementById("b408-lok-count").innerText = `${b408Loks.length} / 3`;
-      document.getElementById("b408-btn-add-lok").disabled = (b408Loks.length >= 3);
+    }
+
+    // Verfolgt, welche Lok-Karte gerade im sichtbaren Bereich des Karussells ist,
+    // damit der Punkte-Indikator mitwandert und nach "+ Lok hinzufügen" automatisch
+    // zur neuen Karte gescrollt wird.
+    let b408LastActiveIndex = 0;
+
+    function b408CarouselScrolled() {
+      const container = document.getElementById("b408-lok-container");
+      const cardWidth = container.clientWidth;
+      if (!cardWidth) return;
+      const index = Math.round(container.scrollLeft / cardWidth);
+      if (index !== b408LastActiveIndex && index < b408Loks.length) {
+        b408LastActiveIndex = index;
+        document.querySelectorAll('#b408-lok-dots .lok-dot').forEach((dot, i) => {
+          dot.classList.toggle('active', i === index);
+        });
+      }
     }
 
     // Automatische Anpassung je nach Wagenzuggewicht (> 800 t -> G, sonst -> P).
