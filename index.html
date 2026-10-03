@@ -700,6 +700,18 @@
       display: flex;
       justify-content: space-between;
       font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .fb-log-entry-top::-webkit-details-marker {
+      display: none;
+    }
+
+    .fb-log-entry-exact {
+      border-top: 1px dashed var(--border);
+      margin-top: 6px;
+      padding-top: 6px;
     }
 
     .fb-log-fahrt .fb-log-entry-top {
@@ -1846,13 +1858,14 @@
         const lastEntry = currentShift.entries[currentShift.entries.length - 1];
         routeEl.textContent = `${currentShift.start.ort.name} → ${lastEntry.ort.name}`;
         logEl.innerHTML = currentShift.segments.slice().reverse().map(s => `
-          <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
-            <div class="fb-log-entry-top">
+          <details class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
+            <summary class="fb-log-entry-top">
               <span>${s.art}</span>
               <span>${fbFormatDuration(s.dauerMs)}</span>
-            </div>
+            </summary>
             <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}</div>
-          </div>
+            <div class="fb-log-entry-detail fb-log-entry-exact">Von: ${fbFormatDateTime(s.zeitVon)} · Bis: ${fbFormatDateTime(s.zeitBis)}</div>
+          </details>
         `).join('');
       }
 
