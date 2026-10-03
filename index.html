@@ -230,6 +230,29 @@
       color: var(--accent);
     }
 
+    .zeit-dual-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .zeit-dual-box {
+      flex: 1;
+      text-align: center;
+    }
+
+    .zeit-dual-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .zeit-dual-value {
+      font-size: 1.05rem;
+      font-weight: bold;
+    }
+
     button.calc-btn {
       width: 100%;
       padding: 14px;
@@ -957,7 +980,16 @@
 
       <div id="result-zeit" class="result-box">
         <div class="result-title">Zeitabweichung</div>
-        <div id="zeit-wert" class="result-value">-</div>
+        <div class="zeit-dual-row">
+          <div class="zeit-dual-box">
+            <div class="zeit-dual-label">Verspätung</div>
+            <div id="zeit-wert-spaet" class="zeit-dual-value" style="color: #ef4444;">-</div>
+          </div>
+          <div class="zeit-dual-box">
+            <div class="zeit-dual-label">Zu früh</div>
+            <div id="zeit-wert-frueh" class="zeit-dual-value" style="color: #22c55e;">-</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1292,7 +1324,6 @@
       const t1 = document.getElementById('time1').value;
       const t2 = document.getElementById('time2').value;
       const resultBox = document.getElementById('result-zeit');
-      const resultVal = document.getElementById('zeit-wert');
 
       if (!t1 || !t2) {
         resultBox.classList.remove('visible');
@@ -1302,38 +1333,24 @@
       const [h1, m1] = t1.split(':').map(Number);
       const [h2, m2] = t2.split(':').map(Number);
 
-      // Differenz am selben Tag (kann negativ sein = früher)
+      // Ohne Datum, nur mit zwei Uhrzeiten, ist nicht eindeutig entscheidbar,
+      // ob Mitternacht überschritten wurde oder nicht — "4 Std. zu früh" und
+      // "20 Std. zu spät" erzeugen exakt dieselben zwei Uhrzeiten. Deshalb
+      // zeigen wir beide möglichen Lesarten nebeneinander an; der Mitarbeiter
+      // weiß ja selbst, ob er zu früh oder zu spät war.
       const diffSameDay = (h2 * 60 + m2) - (h1 * 60 + m1);
+      const spaetMin = ((diffSameDay % 1440) + 1440) % 1440; // immer in [0, 1440)
+      const fruehMin = spaetMin === 0 ? 0 : spaetMin - 1440;  // immer in (-1440, 0]
 
-      // Liegt die Ist-Zeit mehr als 12 Std. "vor" der Soll-Zeit, gehen wir davon
-      // aus, dass Mitternacht überschritten wurde (echte Verspätung), statt
-      // einer unrealistisch frühen Ankunft.
-      let delayMin;
-      if (diffSameDay < -720) {
-        delayMin = diffSameDay + 1440;
-      } else {
-        delayMin = diffSameDay;
-      }
+      const fmt = (min) => {
+        const std = Math.floor(Math.abs(min) / 60);
+        const m = Math.abs(min) % 60;
+        return std > 0 ? `${std} Std. ${m} Min.` : `${m} Min.`;
+      };
 
-      const std = Math.floor(Math.abs(delayMin) / 60);
-      const min = Math.abs(delayMin) % 60;
+      document.getElementById('zeit-wert-spaet').textContent = spaetMin === 0 ? '—' : fmt(spaetMin);
+      document.getElementById('zeit-wert-frueh').textContent = fruehMin === 0 ? '—' : fmt(fruehMin);
 
-      let nebenzeile = std > 0 ? `${std} Std. ${min} Min.` : `${min} Min.`;
-      let hauptwert, farbe;
-
-      if (delayMin > 0) {
-        hauptwert = `+${delayMin} Min.`;
-        farbe = "#ef4444"; // rot
-      } else if (delayMin < 0) {
-        hauptwert = `${delayMin} Min.`;
-        farbe = "#22c55e"; // grün
-      } else {
-        hauptwert = `0 Min.`;
-        farbe = "#22c55e"; // grün
-      }
-
-      resultVal.innerHTML = `${hauptwert} <span style="font-size:0.9rem; font-weight:normal; color:#94a3b8;">(${nebenzeile})</span>`;
-      resultVal.style.color = farbe;
       resultBox.classList.add('visible');
     }
 
