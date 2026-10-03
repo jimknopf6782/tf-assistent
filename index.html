@@ -1342,11 +1342,7 @@
       const spaetMin = ((diffSameDay % 1440) + 1440) % 1440; // immer in [0, 1440)
       const fruehMin = spaetMin === 0 ? 0 : spaetMin - 1440;  // immer in (-1440, 0]
 
-      const fmt = (min) => {
-        const std = Math.floor(Math.abs(min) / 60);
-        const m = Math.abs(min) % 60;
-        return std > 0 ? `${std} Std. ${m} Min.` : `${m} Min.`;
-      };
+      const fmt = (min) => `${Math.abs(min)} Min.`;
 
       document.getElementById('zeit-wert-spaet').textContent = spaetMin === 0 ? '—' : fmt(spaetMin);
       document.getElementById('zeit-wert-frueh').textContent = fruehMin === 0 ? '—' : fmt(fruehMin);
