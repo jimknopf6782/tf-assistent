@@ -793,6 +793,36 @@
       margin-bottom: 10px;
     }
 
+    .fb-edit-link {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .fb-edit-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .fb-edit-row-label {
+      font-size: 0.85rem;
+    }
+
+    .fb-edit-row-label small {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+    }
+
+    .fb-edit-row input[type="time"] {
+      width: auto;
+      padding: 8px;
+    }
+
     .fb-default-tag {
       font-size: 0.7rem;
       font-weight: 700;
@@ -1062,6 +1092,10 @@
           <div id="fb-log"></div>
         </div>
 
+        <div id="fb-edit-link-wrap" style="text-align: right; margin-top: -6px; margin-bottom: 10px; display: none;">
+          <span class="fb-edit-link" onclick="fbOpenEdit()">✏️ Bearbeiten</span>
+        </div>
+
         <div class="fb-footer-actions">
           <button class="btn-add" onclick="fbExportShift(null)">📄 Aktuelle Schicht exportieren (.txt)</button>
         </div>
@@ -1089,6 +1123,16 @@
         <div id="fb-picker-status" class="bst-status-line">Ermittle Standort …</div>
         <div id="fb-picker-list"></div>
         <button class="btn-add" onclick="fbClosePicker()">Abbrechen</button>
+      </div>
+
+      <!-- Uhrzeiten der letzten Schicht nachträglich korrigieren -->
+      <div id="fb-edit-panel" class="fb-picker" style="display: none;">
+        <div class="fb-picker-title">Uhrzeiten korrigieren</div>
+        <div id="fb-edit-list"></div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="fbSaveEdit()">Speichern</button>
+          <button class="btn-add" onclick="fbCloseEdit()">Abbrechen</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1837,6 +1881,66 @@
       `).join('');
     }
 
+    // Liefert eine kurze Bezeichnung für einen Log-Eintrag je nach Typ/Position,
+    // damit die Edit-Liste verständlich ist ("Abfahrt", "Stopp", "Weiterfahrt", "Ankunft").
+    function fbEntryLabel(entry, idx) {
+      if (entry.type === 'ende') return 'Ankunft';
+      if (entry.type === 'stopp') return 'Stopp';
+      return idx === 0 ? 'Abfahrt' : 'Weiterfahrt';
+    }
+
+    function fbTimeInputValue(iso) {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    // Öffnet ein Panel mit einem Zeit-Eingabefeld pro Eintrag der aktuellen/
+    // letzten Schicht. Ändert nur die Uhrzeit (Stunde/Minute), das Datum des
+    // jeweiligen Eintrags bleibt unangetastet — für den Fall "Pause vergessen
+    // zu drücken, Fahrzeit steht jetzt zu lang drin".
+    function fbOpenEdit() {
+      const shifts = fbBuildShifts();
+      const shift = shifts[shifts.length - 1];
+      if (!shift) return;
+
+      document.getElementById('fb-main').style.display = 'none';
+      document.getElementById('fb-edit-panel').style.display = 'block';
+
+      document.getElementById('fb-edit-list').innerHTML = shift.entries.map((entry, i) => `
+        <div class="fb-edit-row">
+          <div class="fb-edit-row-label">
+            ${fbEntryLabel(entry, i)}
+            <small>${bstEscapeHtml(entry.ort.name)}</small>
+          </div>
+          <input type="time" id="fb-edit-time-${i}" value="${fbTimeInputValue(entry.time)}">
+        </div>
+      `).join('');
+    }
+
+    function fbCloseEdit() {
+      document.getElementById('fb-main').style.display = 'block';
+      document.getElementById('fb-edit-panel').style.display = 'none';
+    }
+
+    function fbSaveEdit() {
+      const shifts = fbBuildShifts();
+      const shift = shifts[shifts.length - 1];
+      if (!shift) return;
+
+      shift.entries.forEach((entry, i) => {
+        const val = document.getElementById(`fb-edit-time-${i}`).value; // "HH:MM"
+        if (!val) return;
+        const [h, m] = val.split(':').map(Number);
+        const d = new Date(entry.time);
+        d.setHours(h, m, 0, 0);
+        entry.time = d.toISOString(); // entry ist dieselbe Objektreferenz wie in fbLog
+      });
+
+      fbSave();
+      fbCloseEdit();
+      fbRender();
+    }
+
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       fbUpdateBadge();
@@ -1881,6 +1985,8 @@
 
       const logEl = document.getElementById('fb-log');
       const routeEl = document.getElementById('fb-route');
+      document.getElementById('fb-edit-link-wrap').style.display =
+        (currentShift && currentShift.entries.length > 1) ? 'block' : 'none';
       if (!currentShift || currentShift.segments.length === 0) {
         logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
         document.getElementById('fb-totals').textContent = '';
