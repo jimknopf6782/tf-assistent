@@ -760,6 +760,19 @@
       font-weight: 700;
       margin-bottom: 10px;
     }
+
+    .fb-default-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(220, 38, 38, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .fb-picker-default-wrap {
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -1037,6 +1050,7 @@
       <!-- Standort-Auswahl (beim Abfahrt/Stopp/Weiterfahrt/Beenden) -->
       <div id="fb-picker" class="fb-picker" style="display: none;">
         <div class="fb-picker-title" id="fb-picker-title">Betriebsstelle wählen</div>
+        <div id="fb-picker-default"></div>
         <div class="form-group">
           <input type="text" id="fb-picker-search" placeholder="Suchen oder aus der Liste wählen" oninput="fbPickerSearch()" autocomplete="off">
         </div>
@@ -1867,21 +1881,13 @@
       }
     }
 
+    let fbPickerDefaultOrt = null; // Schnellzugriff "wie zuletzt" (z.B. bei Weiterfahrt)
+
     function fbPressButton(action) {
-      // 'weiterfahrt': du stehst an Ort A und fährst von dort wieder los —
-      // der Ort ist schon bekannt (der Stopp-Ort), also keine neue
-      // Standortabfrage/Auswahl nötig. Direkt als 'start'-Eintrag übernehmen.
-      if (action === 'weiterfahrt') {
-        const last = fbLog[fbLog.length - 1];
-        fbLog.push({ type: 'start', time: new Date().toISOString(), ort: last.ort });
-        fbSave();
-        fbRender();
-        return;
-      }
       // 'beenden': du stehst schon seit dem letzten Stopp (sonst hättest du ja
       // "Weiterfahrt" gedrückt) — die eigentliche Ankunftszeit UND der Ort sind
       // also bereits der letzte Stopp, nicht der Moment des Tastendrucks.
-      // Übernimmt deshalb genau wie "Weiterfahrt" direkt, ohne Picker.
+      // Übernimmt deshalb direkt, ohne Picker.
       if (action === 'beenden') {
         const last = fbLog[fbLog.length - 1];
         fbLog.push({ type: 'ende', time: last.time, ort: last.ort });
@@ -1889,8 +1895,20 @@
         fbRender();
         return;
       }
+      // 'weiterfahrt': normalerweise fährst du vom selben Ort weiter, an dem du
+      // gestoppt hast — aber manchmal wirst du als Fahrgast zu einer anderen
+      // Betriebsstelle gebracht, um dort einen anderen Zug zu übernehmen. Deshalb
+      // Picker öffnen, aber den letzten Ort oben als Ein-Tap-Schnellzugriff anbieten.
+      if (action === 'weiterfahrt') {
+        const last = fbLog[fbLog.length - 1];
+        fbPickerDefaultOrt = { code: last.ort.code, name: last.ort.name };
+        fbPickerPurpose = 'start';
+        fbOpenPicker();
+        return;
+      }
       // 'abfahrt' -> neuer 'start'-Eintrag (neue Schicht beginnt, Ort unbekannt -> Auswahl)
       // 'stopp' -> 'stopp'-Eintrag (Fahrt endet, Stand beginnt, Schicht läuft weiter)
+      fbPickerDefaultOrt = null;
       if (action === 'abfahrt') fbPickerPurpose = 'start';
       else if (action === 'stopp') fbPickerPurpose = 'stopp';
       fbOpenPicker();
@@ -1903,6 +1921,24 @@
       document.getElementById('fb-picker-title').textContent = titles[fbPickerPurpose] || 'Betriebsstelle wählen';
       document.getElementById('fb-picker-search').value = '';
       document.getElementById('fb-picker-list').innerHTML = '';
+
+      const defaultEl = document.getElementById('fb-picker-default');
+      if (fbPickerDefaultOrt) {
+        defaultEl.innerHTML = `
+          <div class="fb-picker-default-wrap">
+            <div class="bst-item" style="cursor: pointer; border-color: var(--accent);" onclick="fbSelectDefaultOrt()">
+              <div class="bst-item-top">
+                <span class="bst-code">${bstEscapeHtml(fbPickerDefaultOrt.code)}</span>
+                <span class="fb-default-tag">wie zuletzt</span>
+              </div>
+              <div class="bst-name">${bstEscapeHtml(fbPickerDefaultOrt.name)}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        defaultEl.innerHTML = '';
+      }
+
       const statusEl = document.getElementById('fb-picker-status');
 
       if (!bstData) {
@@ -1943,6 +1979,15 @@
       document.getElementById('fb-main').style.display = 'block';
       document.getElementById('fb-picker').style.display = 'none';
       fbPickerPurpose = null;
+      fbPickerDefaultOrt = null;
+    }
+
+    function fbSelectDefaultOrt() {
+      if (!fbPickerDefaultOrt) return;
+      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { ...fbPickerDefaultOrt } });
+      fbSave();
+      fbClosePicker();
+      fbRender();
     }
 
     function fbPickerSearch() {
