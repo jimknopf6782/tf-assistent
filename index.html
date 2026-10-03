@@ -751,6 +751,26 @@
       margin-bottom: 8px;
     }
 
+    .fb-shift-segments {
+      margin-top: 4px;
+    }
+
+    .fb-shift-segments summary {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .fb-shift-segments summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .fb-shift-segments[open] summary {
+      margin-bottom: 8px;
+    }
+
     .fb-shift-export-btn {
       font-size: 0.75rem;
       padding: 6px 10px;
@@ -1801,6 +1821,22 @@
       });
     }
 
+    // Baut die aufklappbare Fahrt-/Stand-Liste (neueste zuerst) — wird sowohl
+    // für die aktuelle Schicht oben als auch für frühere Schichten in der
+    // Liste verwendet, damit beide dasselbe Antipp-Verhalten haben.
+    function fbRenderSegmentList(segments) {
+      return segments.slice().reverse().map(s => `
+        <details class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
+          <summary class="fb-log-entry-top">
+            <span>${s.art}</span>
+            <span>${fbFormatDuration(s.dauerMs)}</span>
+          </summary>
+          <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}</div>
+          <div class="fb-log-entry-detail fb-log-entry-exact">Von: ${fbFormatDateTime(s.zeitVon)} · Bis: ${fbFormatDateTime(s.zeitBis)}</div>
+        </details>
+      `).join('');
+    }
+
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       fbUpdateBadge();
@@ -1857,16 +1893,7 @@
           `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Standzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
         const lastEntry = currentShift.entries[currentShift.entries.length - 1];
         routeEl.textContent = `${currentShift.start.ort.name} → ${lastEntry.ort.name}`;
-        logEl.innerHTML = currentShift.segments.slice().reverse().map(s => `
-          <details class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
-            <summary class="fb-log-entry-top">
-              <span>${s.art}</span>
-              <span>${fbFormatDuration(s.dauerMs)}</span>
-            </summary>
-            <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}</div>
-            <div class="fb-log-entry-detail fb-log-entry-exact">Von: ${fbFormatDateTime(s.zeitVon)} · Bis: ${fbFormatDateTime(s.zeitBis)}</div>
-          </details>
-        `).join('');
+        logEl.innerHTML = fbRenderSegmentList(currentShift.segments);
       }
 
       const olderWrap = document.getElementById('fb-older-wrap');
@@ -1888,6 +1915,10 @@
               </div>
               <div class="fb-shift-entry-detail">${routeTxt}</div>
               <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
+              <details class="fb-shift-segments">
+                <summary>Abschnitte anzeigen</summary>
+                ${fbRenderSegmentList(shift.segments)}
+              </details>
             </div>
           `;
         }).join('');
