@@ -944,14 +944,14 @@
       <div class="form-group">
         <label>Soll-Zeit:</label>
         <div class="time-inputs">
-          <input type="time" id="time1" onchange="berechneZeit()">
+          <input type="time" id="time1" onchange="berechneZeit()" onclick="try{this.showPicker()}catch(e){}">
         </div>
       </div>
 
       <div class="form-group">
         <label>Ist-Zeit:</label>
         <div class="time-inputs">
-          <input type="time" id="time2" onchange="berechneZeit()">
+          <input type="time" id="time2" onchange="berechneZeit()" onclick="try{this.showPicker()}catch(e){}">
         </div>
       </div>
 
@@ -1912,7 +1912,7 @@
             ${fbEntryLabel(entry, i)}
             <small>${bstEscapeHtml(entry.ort.name)}</small>
           </div>
-          <input type="time" id="fb-edit-time-${i}" value="${fbTimeInputValue(entry.time)}">
+          <input type="time" id="fb-edit-time-${i}" value="${fbTimeInputValue(entry.time)}" onclick="try{this.showPicker()}catch(e){}">
         </div>
       `).join('');
     }
