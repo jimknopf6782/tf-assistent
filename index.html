@@ -2141,29 +2141,45 @@
     }
 
     function fbPickerSearch() {
-      const q = document.getElementById('fb-picker-search').value.trim().toLowerCase();
+      const raw = document.getElementById('fb-picker-search').value.trim();
+      const q = raw.toLowerCase();
       if (!q) {
-        fbRenderPickerList(fbPickerCandidates.map(c => c.row), fbPickerCandidates.map(c => c.dist));
+        fbRenderPickerList(fbPickerCandidates.map(c => c.row), fbPickerCandidates.map(c => c.dist), null);
         return;
       }
-      if (!bstData) return;
+      if (!bstData) {
+        fbRenderPickerList([], [], raw);
+        return;
+      }
       const matches = bstData.filter(row => {
         const [code, name, kurz] = row;
         return code.toLowerCase().includes(q) || name.toLowerCase().includes(q) || kurz.toLowerCase().includes(q);
       }).slice(0, 30);
-      fbRenderPickerList(matches, []);
+      fbRenderPickerList(matches, [], raw);
     }
 
     let fbPickerRenderedRows = [];
 
-    function fbRenderPickerList(rows, dists) {
+    function fbRenderPickerList(rows, dists, freitextQuery) {
       fbPickerRenderedRows = rows;
       const listEl = document.getElementById('fb-picker-list');
+
+      // Freitext-Option: für Halte ohne eigene Betriebsstelle (freie Strecke,
+      // Selbstblocksignal usw.) — übernimmt den eingegebenen Text direkt als Ort.
+      const freitextHtml = freitextQuery ? `
+        <div class="bst-item" style="cursor: pointer; border-style: dashed;" onclick="fbSelectFreitext()">
+          <div class="bst-item-top">
+            <span class="bst-code">✏️ Freie Ortsangabe</span>
+          </div>
+          <div class="bst-name">„${bstEscapeHtml(freitextQuery)}" übernehmen</div>
+        </div>
+      ` : '';
+
       if (rows.length === 0) {
-        listEl.innerHTML = '<div class="bst-empty">Keine Treffer.</div>';
+        listEl.innerHTML = freitextHtml || '<div class="bst-empty">Keine Treffer.</div>';
         return;
       }
-      listEl.innerHTML = rows.map((row, i) => {
+      listEl.innerHTML = freitextHtml + rows.map((row, i) => {
         const [code, name, kurz, kat, status, land] = row;
         const distTxt = dists[i] != null ? ` · ${bstFormatDistance(dists[i])}` : '';
         return `
@@ -2179,6 +2195,15 @@
           </div>
         `;
       }).join('');
+    }
+
+    function fbSelectFreitext() {
+      const text = document.getElementById('fb-picker-search').value.trim();
+      if (!text) return;
+      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code: text, name: text } });
+      fbSave();
+      fbClosePicker();
+      fbRender();
     }
 
     function fbSelectOrtByIndex(i) {
