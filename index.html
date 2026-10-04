@@ -804,38 +804,63 @@
       cursor: pointer;
     }
 
-    .fb-route-row {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 8px;
+    .fb-route-entry-compact {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
     }
 
-    .fb-route-text {
+    .fb-route-row-compact {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+
+    .fb-route-chevron {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      width: 12px;
+    }
+
+    .fb-route-title-compact {
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       flex: 1;
       min-width: 0;
     }
 
-    .fb-route-title {
-      font-size: 0.85rem;
-      font-weight: 600;
+    .fb-route-avg-compact {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
-    .fb-route-delete-btn {
-      flex-shrink: 0;
-      width: 28px;
-      height: 28px;
-      padding: 0;
+    .fb-route-detail-expanded {
+      padding: 0 12px 10px 12px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+
+    .fb-route-delete-btn-inline {
+      margin-top: 6px;
+      width: 100%;
+      font-size: 0.75rem;
+      padding: 7px 10px;
       border-radius: 6px;
       border: 1px solid var(--danger);
       background: var(--card-bg);
       color: var(--danger);
-      font-size: 0.9rem;
-      line-height: 1;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
 
     .fb-footer-actions {
@@ -1185,6 +1210,9 @@
         </div>
 
         <div id="fb-view-strecken" style="display: none;">
+          <div class="form-group" id="fb-route-search-wrap" style="margin-bottom: 10px; display: none;">
+            <input type="text" id="fb-route-search" placeholder="Suche nach Ort oder Code (z. B. München oder MLR)" oninput="fbRenderRoutes()" autocomplete="off">
+          </div>
           <div id="fb-routes-list"></div>
           <div class="fb-footer-actions">
             <button class="btn-add" onclick="fbOpenRouteAdd()">+ Strecke beobachten</button>
@@ -2040,37 +2068,80 @@
       streckenBtn.classList.toggle('active', zeigeStrecken);
     }
 
+    // Welche Strecken (per Index in fbRoutes) gerade aufgeklappt sind. Bleibt
+    // nur für die laufende Sitzung im Speicher, kein Persistierungsbedarf.
+    let fbRoutesExpanded = new Set();
+
+    function fbToggleRouteExpand(i) {
+      if (fbRoutesExpanded.has(i)) fbRoutesExpanded.delete(i); else fbRoutesExpanded.add(i);
+      fbRenderRoutes();
+    }
+
     function fbRenderRoutes() {
       const listEl = document.getElementById('fb-routes-list');
+      const searchWrap = document.getElementById('fb-route-search-wrap');
       if (!listEl) return;
       fbSyncRoutes();
+
       if (fbRoutes.length === 0) {
+        if (searchWrap) searchWrap.style.display = 'none';
         listEl.innerHTML = '<div class="bst-empty">Noch keine Strecke beobachtet.</div>';
         return;
       }
-      listEl.innerHTML = fbRoutes.map((route, i) => {
+      if (searchWrap) searchWrap.style.display = '';
+
+      const searchEl = document.getElementById('fb-route-search');
+      const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+      const indices = fbRoutes
+        .map((route, i) => i)
+        .filter(i => {
+          if (!q) return true;
+          const r = fbRoutes[i];
+          return r.vonName.toLowerCase().includes(q) ||
+                 r.bisName.toLowerCase().includes(q) ||
+                 r.von.toLowerCase().includes(q) ||
+                 r.bis.toLowerCase().includes(q);
+        });
+
+      if (indices.length === 0) {
+        listEl.innerHTML = '<div class="bst-empty">Keine Strecke gefunden.</div>';
+        return;
+      }
+
+      listEl.innerHTML = indices.map(i => {
+        const route = fbRoutes[i];
         const fahrten = route.fahrten;
-        let body;
-        if (fahrten.length === 0) {
-          body = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
-        } else {
-          const avgMs = fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length;
-          const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
-          const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
-          body = `
-            <div class="fb-shift-entry-detail"><strong>Ø ${fbFormatDuration(avgMs)}</strong> reine Fahrzeit (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>
-            <div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)}</div>
+        const expanded = fbRoutesExpanded.has(i);
+        const avgText = fahrten.length > 0
+          ? `Ø ${fbFormatDuration(fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length)}`
+          : 'noch keine Fahrt';
+
+        let detail = '';
+        if (expanded) {
+          let statsHtml;
+          if (fahrten.length === 0) {
+            statsHtml = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
+          } else {
+            const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
+            const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
+            statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
+          }
+          detail = `
+            <div class="fb-route-detail-expanded">
+              ${statsHtml}
+              <button class="fb-route-delete-btn-inline" onclick="event.stopPropagation(); fbRemoveRoute(${i})">🗑 Strecke entfernen</button>
+            </div>
           `;
         }
+
         return `
-          <div class="fb-shift-entry fb-route-entry">
-            <div class="fb-route-row">
-              <div class="fb-route-text">
-                <div class="fb-route-title">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</div>
-                ${body}
-              </div>
-              <button class="fb-route-delete-btn" onclick="fbRemoveRoute(${i})" title="Strecke entfernen" aria-label="Strecke entfernen">🗑</button>
+          <div class="fb-route-entry-compact">
+            <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
+              <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
+              <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+              <span class="fb-route-avg-compact">${avgText}</span>
             </div>
+            ${detail}
           </div>
         `;
       }).join('');
@@ -2078,6 +2149,7 @@
 
     function fbRemoveRoute(i) {
       fbRoutes.splice(i, 1);
+      fbRoutesExpanded.clear(); // Indizes verschieben sich, aufgeklappte Zustände verwerfen
       fbSaveRoutes();
       fbRenderRoutes();
     }
