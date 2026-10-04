@@ -804,21 +804,25 @@
       cursor: pointer;
     }
 
-    .fb-route-entry {
-      position: relative;
-      padding-bottom: 36px;
+    .fb-route-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .fb-route-text {
+      flex: 1;
+      min-width: 0;
     }
 
     .fb-route-title {
       font-size: 0.85rem;
       font-weight: 600;
-      padding-right: 10px;
     }
 
     .fb-route-delete-btn {
-      position: absolute;
-      right: 10px;
-      bottom: 8px;
+      flex-shrink: 0;
       width: 28px;
       height: 28px;
       padding: 0;
@@ -1125,6 +1129,12 @@
     <!-- Modul 5: Fahrtenbuch -->
     <div id="tab-fahrtenbuch" class="tab-content">
       <div id="fb-main">
+        <div class="rule-switcher" style="margin-top: 0; margin-bottom: 14px;">
+          <button id="fb-subtab-fahrten" class="rule-btn active" onclick="fbSetSubView('fahrten')">Fahrten</button>
+          <button id="fb-subtab-strecken" class="rule-btn" onclick="fbSetSubView('strecken')">Strecken</button>
+        </div>
+
+        <div id="fb-view-fahrten">
         <div id="fb-status-box" class="fb-status-box">
           <div id="fb-status-label" class="fb-status-label">Bereit</div>
           <div id="fb-status-detail" class="fb-status-detail">Noch keine Fahrt begonnen.</div>
@@ -1172,13 +1182,13 @@
         <div class="fb-footer-actions">
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
         </div>
-
-        <div class="fb-log-header" style="margin-top: 20px;">
-          <span>Beobachtete Strecken</span>
         </div>
-        <div id="fb-routes-list"></div>
-        <div class="fb-footer-actions">
-          <button class="btn-add" onclick="fbOpenRouteAdd()">+ Strecke beobachten</button>
+
+        <div id="fb-view-strecken" style="display: none;">
+          <div id="fb-routes-list"></div>
+          <div class="fb-footer-actions">
+            <button class="btn-add" onclick="fbOpenRouteAdd()">+ Strecke beobachten</button>
+          </div>
         </div>
 
       </div>
@@ -1982,6 +1992,23 @@
       if (changed) fbSaveRoutes();
     }
 
+    // Umschalten zwischen den beiden Fahrtenbuch-Unteransichten "Fahrten"
+    // (Start/Stopp-Steuerung + Verlauf) und "Strecken" (Beobachtete Strecken),
+    // damit die Streckenstatistik nicht immer weiter nach unten rutscht, je
+    // mehr Schichten im Verlauf stehen.
+    function fbSetSubView(view) {
+      const fahrtenEl = document.getElementById('fb-view-fahrten');
+      const streckenEl = document.getElementById('fb-view-strecken');
+      const fahrtenBtn = document.getElementById('fb-subtab-fahrten');
+      const streckenBtn = document.getElementById('fb-subtab-strecken');
+      if (!fahrtenEl || !streckenEl) return;
+      const zeigeStrecken = view === 'strecken';
+      fahrtenEl.style.display = zeigeStrecken ? 'none' : '';
+      streckenEl.style.display = zeigeStrecken ? '' : 'none';
+      fahrtenBtn.classList.toggle('active', !zeigeStrecken);
+      streckenBtn.classList.toggle('active', zeigeStrecken);
+    }
+
     function fbRenderRoutes() {
       const listEl = document.getElementById('fb-routes-list');
       if (!listEl) return;
@@ -2006,9 +2033,13 @@
         }
         return `
           <div class="fb-shift-entry fb-route-entry">
-            <div class="fb-route-title">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</div>
-            ${body}
-            <button class="fb-route-delete-btn" onclick="fbRemoveRoute(${i})" title="Strecke entfernen" aria-label="Strecke entfernen">🗑</button>
+            <div class="fb-route-row">
+              <div class="fb-route-text">
+                <div class="fb-route-title">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</div>
+                ${body}
+              </div>
+              <button class="fb-route-delete-btn" onclick="fbRemoveRoute(${i})" title="Strecke entfernen" aria-label="Strecke entfernen">🗑</button>
+            </div>
           </div>
         `;
       }).join('');
