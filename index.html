@@ -1940,14 +1940,19 @@
     }
 
     // ===== Beobachtete Strecken (Start -> Ziel, reine Fahrzeit-Historie) =====
-    // Eine "Strecke" ist ein Start-Code + Ziel-Code-Paar. Jede abgeschlossene
-    // Schicht, die exakt mit diesem Start beginnt und mit diesem Ziel endet
-    // (fbBuildShifts().start / .end — Zwischenstopps, Kopfmachen usw. spielen
-    // keine Rolle), wird EINMALIG dauerhaft in route.fahrten eingetragen
+    // Eine "Strecke" ist ein Start-Code + Ziel-Code-Paar. Gematcht wird nicht
+    // nur Schicht-Start/-Ende, sondern JEDER "start"-Eintrag (erste Abfahrt
+    // oder Weiterfahrt nach einem Zwischenstopp) als möglicher Von-Punkt und
+    // JEDER "stopp"/"ende"-Eintrag als möglicher Bis-Punkt innerhalb derselben
+    // Schicht — so werden auch Teilstrecken (z. B. Würzburg -> München-Leim
+    // als Zwischenstopp vor der Weiterfahrt nach Kufstein) erfasst, sobald an
+    // der Zwischenstation kurz Stopp/Weiterfahrt gedrückt wurde. Erfasste
+    // Treffer werden EINMALIG dauerhaft in route.fahrten eingetragen
     // (fbSyncRoutes()), nicht nur live aus fbLog nachgerechnet. Dadurch bleibt
     // die Strecken-Statistik erhalten, auch wenn später "Alle Schichten
     // löschen" gedrückt wird. Erfasst wird bewusst nur die reine Fahrzeit
-    // (fahrzeitMs), keine Standzeiten.
+    // zwischen Von- und Bis-Punkt (ohne dortige Standzeiten), keine
+    // Standzeiten an etwaigen Zwischenstopps.
     let fbRoutes = [];
 
     function fbLoadRoutes() {
@@ -1982,11 +1987,37 @@
       fbRoutes.forEach(route => {
         shifts.forEach(shift => {
           if (!shift.end) return; // offene (laufende) Schicht noch nicht werten
-          if (shift.start.ort.code !== route.von || shift.end.ort.code !== route.bis) return;
-          const schonErfasst = route.fahrten.some(f => f.datum === shift.start.time);
-          if (schonErfasst) return;
-          route.fahrten.push({ fahrzeitMs: shift.fahrzeitMs, datum: shift.start.time });
-          changed = true;
+          const entries = shift.entries;
+          let i = 0;
+          while (i < entries.length) {
+            // Von-Punkt: jede Abfahrt (erster Start oder Weiterfahrt nach
+            // Zwischenstopp) am gesuchten Von-Ort.
+            if (entries[i].type !== 'start' || entries[i].ort.code !== route.von) { i++; continue; }
+            // nächsten passenden Bis-Punkt danach suchen (Stopp oder Ende).
+            let j = i + 1;
+            let found = -1;
+            while (j < entries.length) {
+              if ((entries[j].type === 'stopp' || entries[j].type === 'ende') && entries[j].ort.code === route.bis) {
+                found = j;
+                break;
+              }
+              j++;
+            }
+            if (found === -1) { i++; continue; }
+            // reine Fahrzeit zwischen Von und Bis (Standzeiten an eventuellen
+            // Zwischenstopps dazwischen nicht mitzählen).
+            let fahrzeitMs = 0;
+            for (let k = i; k < found; k++) {
+              if (entries[k].type !== 'start') continue;
+              fahrzeitMs += new Date(entries[k + 1].time) - new Date(entries[k].time);
+            }
+            const schonErfasst = route.fahrten.some(f => f.datum === entries[i].time);
+            if (!schonErfasst) {
+              route.fahrten.push({ fahrzeitMs, datum: entries[i].time });
+              changed = true;
+            }
+            i = found + 1; // weitersuchen, falls dieselbe Teilstrecke in der Schicht nochmal vorkommt
+          }
         });
       });
       if (changed) fbSaveRoutes();
