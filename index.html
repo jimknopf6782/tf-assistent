@@ -1143,6 +1143,14 @@
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
         </div>
 
+        <div class="fb-log-header" style="margin-top: 20px;">
+          <span>Beobachtete Strecken</span>
+        </div>
+        <div id="fb-routes-list"></div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="fbOpenRouteAdd()">+ Strecke beobachten</button>
+        </div>
+
       </div>
 
       <!-- Standort-Auswahl (beim Abfahrt/Stopp/Weiterfahrt/Beenden) -->
@@ -1165,6 +1173,17 @@
           <button class="btn-add" onclick="fbSaveEdit()">Speichern</button>
           <button class="btn-add" onclick="fbCloseEdit()">Abbrechen</button>
         </div>
+      </div>
+
+      <!-- Start/Ziel einer neuen beobachteten Strecke wählen (zweistufig,
+           nutzt denselben Betriebsstellen-Picker wie Abfahrt/Stopp) -->
+      <div id="fb-route-picker" class="fb-picker" style="display: none;">
+        <div class="fb-picker-title" id="fb-route-picker-title">Startort wählen</div>
+        <div class="form-group">
+          <input type="text" id="fb-route-picker-search" placeholder="Suchen" oninput="fbRoutePickerSearch()" autocomplete="off">
+        </div>
+        <div id="fb-route-picker-list"></div>
+        <button class="btn-add" onclick="fbCloseRouteAdd()">Abbrechen</button>
       </div>
     </div>
   </div>
@@ -1287,6 +1306,7 @@
 
       // Fahrtenbuch-Log aus vorheriger Sitzung laden
       fbLoad();
+      fbLoadRoutes();
       fbUpdateBadge();
     });
 
@@ -1776,6 +1796,7 @@
     // WICHTIG: Dieses Modul wird absichtlich NICHT durch resetModuleState()
     // zurückgesetzt — eine Schicht soll über mehrere App-Besuche bestehen bleiben.
     const FB_STORAGE_KEY = 'tfFahrtenbuchLog';
+    const FB_ROUTES_KEY = 'tfFahrtenbuchRoutes';
     let fbLog = []; // flache Liste: {type: 'start'|'stopp'|'ende', time, ort}
     let fbPickerPurpose = null; // 'start' | 'stopp' | 'ende' — welcher Eintragstyp als nächstes gespeichert wird
     let fbPickerCandidates = [];
@@ -1878,6 +1899,172 @@
       });
     }
 
+    // ===== Beobachtete Strecken (Start -> Ziel, reine Fahrzeit-Historie) =====
+    // Eine "Strecke" ist ein Start-Code + Ziel-Code-Paar. Jede abgeschlossene
+    // Schicht, die exakt mit diesem Start beginnt und mit diesem Ziel endet
+    // (fbBuildShifts().start / .end — Zwischenstopps, Kopfmachen usw. spielen
+    // keine Rolle), wird EINMALIG dauerhaft in route.fahrten eingetragen
+    // (fbSyncRoutes()), nicht nur live aus fbLog nachgerechnet. Dadurch bleibt
+    // die Strecken-Statistik erhalten, auch wenn später "Alle Schichten
+    // löschen" gedrückt wird. Erfasst wird bewusst nur die reine Fahrzeit
+    // (fahrzeitMs), keine Standzeiten.
+    let fbRoutes = [];
+
+    function fbLoadRoutes() {
+      try {
+        const raw = localStorage.getItem(FB_ROUTES_KEY);
+        fbRoutes = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        fbRoutes = [];
+      }
+      // Ältere Strecken (vor Einführung der dauerhaften Historie) bekommen
+      // ein leeres fahrten-Array, damit fbSyncRoutes() sie befüllen kann.
+      fbRoutes.forEach(r => { if (!r.fahrten) r.fahrten = []; });
+    }
+
+    function fbSaveRoutes() {
+      try {
+        localStorage.setItem(FB_ROUTES_KEY, JSON.stringify(fbRoutes));
+      } catch (e) {
+        console.log('Strecken: Speichern fehlgeschlagen', e);
+      }
+    }
+
+    // Gleicht alle beobachteten Strecken gegen den aktuellen Schicht-Verlauf
+    // ab und trägt neu gefundene, passende Fahrten dauerhaft ein. Jede Schicht
+    // wird anhand ihrer Start-Uhrzeit (eindeutig, da sich Schichten nicht
+    // überlappen) als "schon erfasst" markiert, damit nichts doppelt gezählt
+    // wird, egal wie oft fbSyncRoutes() aufgerufen wird.
+    function fbSyncRoutes() {
+      if (fbRoutes.length === 0) return;
+      const shifts = fbBuildShifts();
+      let changed = false;
+      fbRoutes.forEach(route => {
+        shifts.forEach(shift => {
+          if (!shift.end) return; // offene (laufende) Schicht noch nicht werten
+          if (shift.start.ort.code !== route.von || shift.end.ort.code !== route.bis) return;
+          const schonErfasst = route.fahrten.some(f => f.datum === shift.start.time);
+          if (schonErfasst) return;
+          route.fahrten.push({ fahrzeitMs: shift.fahrzeitMs, datum: shift.start.time });
+          changed = true;
+        });
+      });
+      if (changed) fbSaveRoutes();
+    }
+
+    function fbRenderRoutes() {
+      const listEl = document.getElementById('fb-routes-list');
+      if (!listEl) return;
+      fbSyncRoutes();
+      if (fbRoutes.length === 0) {
+        listEl.innerHTML = '<div class="bst-empty">Noch keine Strecke beobachtet.</div>';
+        return;
+      }
+      listEl.innerHTML = fbRoutes.map((route, i) => {
+        const fahrten = route.fahrten;
+        let body;
+        if (fahrten.length === 0) {
+          body = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
+        } else {
+          const avgMs = fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length;
+          const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
+          const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
+          body = `
+            <div class="fb-shift-entry-detail"><strong>Ø ${fbFormatDuration(avgMs)}</strong> reine Fahrzeit (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>
+            <div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)}</div>
+          `;
+        }
+        return `
+          <div class="fb-shift-entry">
+            <div class="fb-shift-entry-top">
+              <span>${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+              <button class="fb-shift-export-btn" style="color: var(--danger); border-color: var(--danger);" onclick="fbRemoveRoute(${i})">Entfernen</button>
+            </div>
+            ${body}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function fbRemoveRoute(i) {
+      fbRoutes.splice(i, 1);
+      fbSaveRoutes();
+      fbRenderRoutes();
+    }
+
+    // --- Picker zum Anlegen einer neuen Strecke (zweistufig: Start, dann Ziel) ---
+    let fbRoutePickerStage = null; // 'von' | 'bis'
+    let fbRoutePickerVon = null;   // {code, name} des gewählten Starts
+    let fbRoutePickerRows = [];
+
+    function fbOpenRouteAdd() {
+      fbRoutePickerStage = 'von';
+      fbRoutePickerVon = null;
+      document.getElementById('fb-main').style.display = 'none';
+      document.getElementById('fb-route-picker').style.display = 'block';
+      document.getElementById('fb-route-picker-title').textContent = 'Startort wählen';
+      document.getElementById('fb-route-picker-search').value = '';
+      document.getElementById('fb-route-picker-list').innerHTML = '';
+      bstEnsureLoaded();
+    }
+
+    function fbCloseRouteAdd() {
+      document.getElementById('fb-main').style.display = 'block';
+      document.getElementById('fb-route-picker').style.display = 'none';
+      fbRoutePickerStage = null;
+      fbRoutePickerVon = null;
+    }
+
+    function fbRoutePickerSearch() {
+      const q = document.getElementById('fb-route-picker-search').value.trim().toLowerCase();
+      const listEl = document.getElementById('fb-route-picker-list');
+      if (!q || !bstData) {
+        listEl.innerHTML = '';
+        fbRoutePickerRows = [];
+        return;
+      }
+      const matches = bstData.filter(row => {
+        const [code, name, kurz] = row;
+        return code.toLowerCase().includes(q) || name.toLowerCase().includes(q) || kurz.toLowerCase().includes(q);
+      }).slice(0, 30);
+      fbRoutePickerRows = matches;
+      listEl.innerHTML = matches.map((row, i) => {
+        const [code, name, kurz, kat, status, land] = row;
+        return `
+          <div class="bst-item" style="cursor: pointer;" onclick="fbRoutePickerSelect(${i})">
+            <div class="bst-item-top">
+              <span class="bst-code">${bstEscapeHtml(code)}</span>
+              <span class="bst-item-right">
+                <span class="bst-land">${bstFlag(land)}</span>
+                <span class="bst-kat">${bstEscapeHtml(kat || '')}</span>
+              </span>
+            </div>
+            <div class="bst-name">${bstEscapeHtml(name)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function fbRoutePickerSelect(i) {
+      const row = fbRoutePickerRows[i];
+      if (!row) return;
+      const [code, name] = row;
+
+      if (fbRoutePickerStage === 'von') {
+        fbRoutePickerVon = { code, name };
+        fbRoutePickerStage = 'bis';
+        document.getElementById('fb-route-picker-title').textContent = 'Zielort wählen';
+        document.getElementById('fb-route-picker-search').value = '';
+        document.getElementById('fb-route-picker-list').innerHTML = '';
+        fbRoutePickerRows = [];
+      } else {
+        fbRoutes.push({ von: fbRoutePickerVon.code, vonName: fbRoutePickerVon.name, bis: code, bisName: name, fahrten: [] });
+        fbSaveRoutes();
+        fbCloseRouteAdd();
+        fbRenderRoutes();
+      }
+    }
+
     // Baut die aufklappbare Fahrt-/Stand-Liste (neueste zuerst) — wird sowohl
     // für die aktuelle Schicht oben als auch für frühere Schichten in der
     // Liste verwendet, damit beide dasselbe Antipp-Verhalten haben.
@@ -1957,6 +2144,7 @@
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       fbUpdateBadge();
+      fbRenderRoutes();
       const status = fbCurrentStatus();
       const singleRow = document.getElementById('fb-btn-row-single');
       const doubleRow = document.getElementById('fb-btn-row-double');
@@ -2230,7 +2418,7 @@
     }
 
     function fbResetLog() {
-      if (!confirm('Wirklich ALLE Schichten (aktuelle und frühere) komplett löschen?')) return;
+      if (!confirm('Wirklich ALLE Schichten (aktuelle und frühere) komplett löschen? Die Strecken-Statistik (Ø/Min/Max) bleibt davon unberührt erhalten.')) return;
       fbLog = [];
       fbSave();
       fbRender();
