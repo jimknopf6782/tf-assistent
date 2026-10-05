@@ -105,6 +105,20 @@
       cursor: pointer;
     }
 
+    #header-settings-btn {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 1.3rem;
+      line-height: 1;
+      padding: 4px 0 4px 10px;
+      cursor: pointer;
+    }
+
     /* Startbildschirm: Kachel-Navigation */
     .home-grid {
       display: flex;
@@ -925,6 +939,7 @@
     <header>
       <button id="header-back-btn" style="display: none;" onclick="goHome()">‹</button>
       <h1 id="app-header-title">Tf-Assistent</h1>
+      <button id="header-settings-btn" onclick="appOpenSettings()" title="Einstellungen" aria-label="Einstellungen">⋮</button>
     </header>
 
     <!-- Startbildschirm: Kachel-Navigation -->
@@ -1000,6 +1015,25 @@
           </span>
           <span class="home-tile-label">Zeitdifferenz</span>
         </button>
+      </div>
+
+      <!-- Export/Import aller App-Daten (gesamtes localStorage, gilt automatisch
+           auch für zukünftige Module) — Einstieg über das Zahnrad im Header. -->
+      <div id="settings-panel" style="display: none;">
+        <div class="fb-log-header"><span>Daten sichern</span></div>
+        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
+          Exportiert alle in dieser App gespeicherten Daten (Fahrtenbuch, beobachtete Strecken, Einstellungen) als Datei — zum Sichern oder zum Übertragen auf ein neues Gerät.
+        </div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="appExportData()">📤 Daten exportieren</button>
+        </div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="appTriggerImport()">📥 Daten importieren</button>
+        </div>
+        <input type="file" id="app-import-file" accept=".json,application/json" style="display: none;" onchange="appImportFile(event)">
+        <div class="fb-footer-actions" style="margin-top: 20px;">
+          <button class="btn-add" onclick="appCloseSettings()">Schließen</button>
+        </div>
       </div>
     </div>
 
@@ -1288,6 +1322,7 @@
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       document.getElementById('header-back-btn').style.display = 'inline-block';
+      document.getElementById('header-settings-btn').style.display = 'none';
       document.getElementById('app-header-title').textContent = MODULE_TITLES[name] || 'Tf-Assistent';
       currentModule = name;
       try {
@@ -1337,11 +1372,90 @@
       }
     }
 
+    // ===== Daten sichern: Export/Import des kompletten localStorage =====
+    // Bewusst generisch über ALLE vorhandenen Keys, nicht auf bestimmte Module
+    // beschränkt — so landen auch künftige Module automatisch mit im Backup,
+    // ohne dass diese Funktion je wieder angefasst werden muss.
+    function appOpenSettings() {
+      document.querySelector('.home-grid').style.display = 'none';
+      document.getElementById('settings-panel').style.display = '';
+    }
+
+    function appCloseSettings() {
+      document.querySelector('.home-grid').style.display = '';
+      document.getElementById('settings-panel').style.display = 'none';
+    }
+
+    function appExportData() {
+      const data = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        data[key] = localStorage.getItem(key);
+      }
+      const payload = {
+        app: 'tf-assistent',
+        exportedAt: new Date().toISOString(),
+        data
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const datum = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `tf-assistent-backup-${datum}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function appTriggerImport() {
+      document.getElementById('app-import-file').click();
+    }
+
+    function appImportFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let parsed;
+        try {
+          parsed = JSON.parse(reader.result);
+        } catch (e) {
+          alert('Die Datei konnte nicht gelesen werden — ist das eine gültige Backup-Datei?');
+          event.target.value = '';
+          return;
+        }
+        if (!parsed || typeof parsed.data !== 'object') {
+          alert('Diese Datei sieht nicht wie ein Tf-Assistent-Backup aus.');
+          event.target.value = '';
+          return;
+        }
+        const anzahl = Object.keys(parsed.data).length;
+        const datumText = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('de-DE') : 'unbekannt';
+        if (!confirm(`Wirklich ALLE aktuellen Daten auf diesem Gerät durch das Backup vom ${datumText} ersetzen (${anzahl} gespeicherte Eintr${anzahl === 1 ? 'ag' : 'äge'})? Das kann nicht rückgängig gemacht werden.`)) {
+          event.target.value = '';
+          return;
+        }
+        localStorage.clear();
+        Object.keys(parsed.data).forEach(key => {
+          localStorage.setItem(key, parsed.data[key]);
+        });
+        alert('Import abgeschlossen. Die App wird jetzt neu geladen.');
+        location.reload();
+      };
+      reader.onerror = () => {
+        alert('Die Datei konnte nicht gelesen werden.');
+      };
+      reader.readAsText(file);
+    }
+
     function goHome() {
       if (currentModule) resetModuleState(currentModule);
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('home-screen').classList.add('active');
       document.getElementById('header-back-btn').style.display = 'none';
+      document.getElementById('header-settings-btn').style.display = 'inline-block';
       document.getElementById('app-header-title').textContent = 'Tf-Assistent';
       currentModule = null;
       fbUpdateBadge();
