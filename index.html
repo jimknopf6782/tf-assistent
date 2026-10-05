@@ -846,6 +846,17 @@
       cursor: pointer;
     }
 
+    .fb-route-search-summary {
+      background: rgba(220, 38, 38, 0.06);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
     .fb-route-entry-compact {
       background: var(--input-bg);
       border: 1px solid var(--border);
@@ -2247,15 +2258,19 @@
 
       const searchEl = document.getElementById('fb-route-search');
       const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+      // Mehrere Suchwörter (Leerzeichen-getrennt) werden UND-verknüpft: eine
+      // Strecke muss ALLE eingegebenen Wörter irgendwo enthalten (Von, Bis,
+      // Code), nicht nur eins. So wird z. B. "Würzburg München" zur
+      // dynamischen Gruppierung über alle Würzburg↔München-Bahnhofsvarianten,
+      // ohne dass irgendwas statisch angelegt/gepflegt werden muss.
+      const terms = q.split(/\s+/).filter(Boolean);
       const indices = fbRoutes
         .map((route, i) => i)
         .filter(i => {
-          if (!q) return true;
+          if (terms.length === 0) return true;
           const r = fbRoutes[i];
-          return r.vonName.toLowerCase().includes(q) ||
-                 r.bisName.toLowerCase().includes(q) ||
-                 r.von.toLowerCase().includes(q) ||
-                 r.bis.toLowerCase().includes(q);
+          const haystack = `${r.vonName} ${r.bisName} ${r.von} ${r.bis}`.toLowerCase();
+          return terms.every(t => haystack.includes(t));
         });
 
       if (indices.length === 0) {
@@ -2263,7 +2278,28 @@
         return;
       }
 
-      listEl.innerHTML = indices.map(i => {
+      // Zusammenfassungszeile nur bei aktiver Suche mit Treffern — zeigt
+      // Anzahl + kombinierten Ø/Min/Max über alle gerade gefilterten
+      // Strecken. Verschwindet wieder, sobald die Suche geleert wird.
+      let summaryHtml = '';
+      if (terms.length > 0) {
+        const alleFahrten = indices.flatMap(i => fbRoutes[i].fahrten);
+        if (alleFahrten.length > 0) {
+          const avgMs = alleFahrten.reduce((s, t) => s + t.fahrzeitMs, 0) / alleFahrten.length;
+          const minMs = Math.min(...alleFahrten.map(t => t.fahrzeitMs));
+          const maxMs = Math.max(...alleFahrten.map(t => t.fahrzeitMs));
+          summaryHtml = `
+            <div class="fb-route-search-summary">
+              ${indices.length} Strecke${indices.length === 1 ? '' : 'n'} gefunden · Ø kombiniert: ${fbFormatDuration(avgMs)}<br>
+              Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${alleFahrten.length} Fahrt${alleFahrten.length === 1 ? '' : 'en'} gesamt)
+            </div>
+          `;
+        } else {
+          summaryHtml = `<div class="fb-route-search-summary">${indices.length} Strecke${indices.length === 1 ? '' : 'n'} gefunden · noch keine Fahrten erfasst</div>`;
+        }
+      }
+
+      listEl.innerHTML = summaryHtml + indices.map(i => {
         const route = fbRoutes[i];
         const fahrten = route.fahrten;
         const expanded = fbRoutesExpanded.has(i);
