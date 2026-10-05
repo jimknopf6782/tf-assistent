@@ -866,7 +866,7 @@
     }
 
     .fb-route-delete-btn-inline {
-      margin-top: 6px;
+      margin-top: 8px;
       width: 100%;
       font-size: 0.75rem;
       padding: 7px 10px;
@@ -874,6 +874,49 @@
       border: 1px solid var(--danger);
       background: var(--card-bg);
       color: var(--danger);
+      cursor: pointer;
+    }
+
+    .fb-route-kategorie-input {
+      margin-top: 4px;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    .fb-route-group {
+      background: var(--input-bg);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .fb-route-group-header {
+      background: rgba(220, 38, 38, 0.06);
+    }
+
+    .fb-route-group-members {
+      padding: 6px 8px 8px 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .fb-route-group-members .fb-route-entry-compact {
+      margin-bottom: 6px;
+    }
+
+    .fb-route-group-members .fb-route-entry-compact:last-child {
+      margin-bottom: 0;
+    }
+
+    .fb-route-group-dissolve-btn {
+      margin: 0 8px 8px 8px;
+      width: calc(100% - 16px);
+      font-size: 0.72rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--text-muted);
+      background: var(--card-bg);
+      color: var(--text-muted);
       cursor: pointer;
     }
 
@@ -1291,7 +1334,7 @@
   </div>
 
   <footer style="text-align: center; margin-top: 20px; font-size: 0.75rem; color: var(--text-muted);">
-    © Marco Weniger, MEV Österreich
+    © Marco Weniger
   </footer>
 
   <script>
@@ -2104,9 +2147,12 @@
       } catch (e) {
         fbRoutes = [];
       }
-      // Ältere Strecken (vor Einführung der dauerhaften Historie) bekommen
-      // ein leeres fahrten-Array, damit fbSyncRoutes() sie befüllen kann.
-      fbRoutes.forEach(r => { if (!r.fahrten) r.fahrten = []; });
+      // Ältere Strecken (vor Einführung der dauerhaften Historie bzw. der
+      // Kategorie) bekommen Default-Werte nachgetragen.
+      fbRoutes.forEach(r => {
+        if (!r.fahrten) r.fahrten = [];
+        if (r.kategorie === undefined) r.kategorie = '';
+      });
     }
 
     function fbSaveRoutes() {
@@ -2182,13 +2228,87 @@
       streckenBtn.classList.toggle('active', zeigeStrecken);
     }
 
-    // Welche Strecken (per Index in fbRoutes) gerade aufgeklappt sind. Bleibt
-    // nur für die laufende Sitzung im Speicher, kein Persistierungsbedarf.
+    // Welche Strecken (per Index in fbRoutes) bzw. welche Kategorien gerade
+    // aufgeklappt sind. Bleibt nur für die laufende Sitzung im Speicher, kein
+    // Persistierungsbedarf.
     let fbRoutesExpanded = new Set();
+    let fbGroupsExpanded = new Set();
 
     function fbToggleRouteExpand(i) {
       if (fbRoutesExpanded.has(i)) fbRoutesExpanded.delete(i); else fbRoutesExpanded.add(i);
       fbRenderRoutes();
+    }
+
+    function fbToggleGroupExpand(kategorie) {
+      if (fbGroupsExpanded.has(kategorie)) fbGroupsExpanded.delete(kategorie); else fbGroupsExpanded.add(kategorie);
+      fbRenderRoutes();
+    }
+
+    // Kategorie ist rein optional und frei vergeben (z. B. "Würzburg →
+    // München") — Strecken mit identischem Kategorie-Text werden in der
+    // Liste zu einer aufklappbaren Gruppe mit kombiniertem Ø zusammengefasst.
+    // Ohne Kategorie bleibt eine Strecke wie bisher einzeln stehen.
+    function fbSetRouteKategorie(i, value) {
+      fbRoutes[i].kategorie = value.trim();
+      fbSaveRoutes();
+      fbRenderRoutes();
+    }
+
+    function fbDissolveGroup(kategorie) {
+      if (!confirm(`Kategorie "${kategorie}" von allen zugehörigen Strecken entfernen? Die Strecken selbst bleiben erhalten, nur die Gruppierung verschwindet.`)) return;
+      fbRoutes.forEach(r => { if ((r.kategorie || '').trim() === kategorie) r.kategorie = ''; });
+      fbGroupsExpanded.delete(kategorie);
+      fbSaveRoutes();
+      fbRenderRoutes();
+    }
+
+    function fbRouteMatchesSearch(i, q) {
+      if (!q) return true;
+      const r = fbRoutes[i];
+      return r.vonName.toLowerCase().includes(q) ||
+             r.bisName.toLowerCase().includes(q) ||
+             r.von.toLowerCase().includes(q) ||
+             r.bis.toLowerCase().includes(q) ||
+             (r.kategorie || '').toLowerCase().includes(q);
+    }
+
+    function fbRouteDetailHtml(route, i) {
+      const fahrten = route.fahrten;
+      let statsHtml;
+      if (fahrten.length === 0) {
+        statsHtml = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
+      } else {
+        const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
+        const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
+        statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
+      }
+      return `
+        <div class="fb-route-detail-expanded">
+          ${statsHtml}
+          <input type="text" class="fb-route-kategorie-input" placeholder="Kategorie (optional, z. B. Würzburg → München)" value="${bstEscapeHtml(route.kategorie || '')}" onclick="event.stopPropagation()" onchange="fbSetRouteKategorie(${i}, this.value)">
+          <button class="fb-route-delete-btn-inline" onclick="event.stopPropagation(); fbRemoveRoute(${i})">🗑 Strecke entfernen</button>
+        </div>
+      `;
+    }
+
+    function fbRenderRouteCard(i) {
+      const route = fbRoutes[i];
+      const fahrten = route.fahrten;
+      const expanded = fbRoutesExpanded.has(i);
+      const avgText = fahrten.length > 0
+        ? `Ø ${fbFormatDuration(fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length)}`
+        : 'noch keine Fahrt';
+      const detail = expanded ? fbRouteDetailHtml(route, i) : '';
+      return `
+        <div class="fb-route-entry-compact">
+          <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
+            <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
+            <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+            <span class="fb-route-avg-compact">${avgText}</span>
+          </div>
+          ${detail}
+        </div>
+      `;
     }
 
     function fbRenderRoutes() {
@@ -2206,56 +2326,60 @@
 
       const searchEl = document.getElementById('fb-route-search');
       const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-      const indices = fbRoutes
-        .map((route, i) => i)
-        .filter(i => {
-          if (!q) return true;
-          const r = fbRoutes[i];
-          return r.vonName.toLowerCase().includes(q) ||
-                 r.bisName.toLowerCase().includes(q) ||
-                 r.von.toLowerCase().includes(q) ||
-                 r.bis.toLowerCase().includes(q);
-        });
 
-      if (indices.length === 0) {
+      // Nach Kategorie gruppieren (nicht-leer); Rest bleibt einzeln wie bisher.
+      const groups = new Map(); // kategorie -> [indices]
+      const standalone = [];
+      fbRoutes.forEach((r, i) => {
+        const kat = (r.kategorie || '').trim();
+        if (kat) {
+          if (!groups.has(kat)) groups.set(kat, []);
+          groups.get(kat).push(i);
+        } else {
+          standalone.push(i);
+        }
+      });
+
+      const items = [];
+      groups.forEach((indices, kat) => {
+        const treffer = q === '' || kat.toLowerCase().includes(q) || indices.some(i => fbRouteMatchesSearch(i, q));
+        if (treffer) items.push({ type: 'group', kategorie: kat, indices, sortKey: kat.toLowerCase() });
+      });
+      standalone.forEach(i => {
+        if (fbRouteMatchesSearch(i, q)) items.push({ type: 'route', index: i, sortKey: (fbRoutes[i].vonName + fbRoutes[i].bisName).toLowerCase() });
+      });
+      items.sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'de'));
+
+      if (items.length === 0) {
         listEl.innerHTML = '<div class="bst-empty">Keine Strecke gefunden.</div>';
         return;
       }
 
-      listEl.innerHTML = indices.map(i => {
-        const route = fbRoutes[i];
-        const fahrten = route.fahrten;
-        const expanded = fbRoutesExpanded.has(i);
-        const avgText = fahrten.length > 0
-          ? `Ø ${fbFormatDuration(fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length)}`
+      listEl.innerHTML = items.map(item => {
+        if (item.type === 'route') return fbRenderRouteCard(item.index);
+
+        const expanded = fbGroupsExpanded.has(item.kategorie);
+        const alleFahrten = item.indices.flatMap(i => fbRoutes[i].fahrten);
+        const avgText = alleFahrten.length > 0
+          ? `Ø ${fbFormatDuration(alleFahrten.reduce((s, t) => s + t.fahrzeitMs, 0) / alleFahrten.length)}`
           : 'noch keine Fahrt';
-
-        let detail = '';
-        if (expanded) {
-          let statsHtml;
-          if (fahrten.length === 0) {
-            statsHtml = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
-          } else {
-            const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
-            const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
-            statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
-          }
-          detail = `
-            <div class="fb-route-detail-expanded">
-              ${statsHtml}
-              <button class="fb-route-delete-btn-inline" onclick="event.stopPropagation(); fbRemoveRoute(${i})">🗑 Strecke entfernen</button>
+        const katAttr = item.kategorie.replace(/'/g, "\\'");
+        const members = expanded
+          ? `
+            <div class="fb-route-group-members">
+              ${item.indices.map(i => fbRenderRouteCard(i)).join('')}
             </div>
-          `;
-        }
-
+            <button class="fb-route-group-dissolve-btn" onclick="event.stopPropagation(); fbDissolveGroup('${katAttr}')">Kategorie auflösen</button>
+          `
+          : '';
         return `
-          <div class="fb-route-entry-compact">
-            <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
+          <div class="fb-route-group">
+            <div class="fb-route-row-compact fb-route-group-header" onclick="fbToggleGroupExpand('${katAttr}')">
               <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
-              <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+              <span class="fb-route-title-compact">📁 ${bstEscapeHtml(item.kategorie)}</span>
               <span class="fb-route-avg-compact">${avgText}</span>
             </div>
-            ${detail}
+            ${members}
           </div>
         `;
       }).join('');
@@ -2334,7 +2458,7 @@
         document.getElementById('fb-route-picker-list').innerHTML = '';
         fbRoutePickerRows = [];
       } else {
-        fbRoutes.push({ von: fbRoutePickerVon.code, vonName: fbRoutePickerVon.name, bis: code, bisName: name, fahrten: [] });
+        fbRoutes.push({ von: fbRoutePickerVon.code, vonName: fbRoutePickerVon.name, bis: code, bisName: name, fahrten: [], kategorie: '' });
         fbSaveRoutes();
         fbCloseRouteAdd();
         fbRenderRoutes();
