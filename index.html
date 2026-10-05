@@ -17,6 +17,34 @@
   <script src="js/lok-db.js"></script>
 
   <style>
+    /* Hochformat erzwingen: Das Manifest ("orientation": "portrait") sperrt
+       die Drehung nur, wenn die App auf Android zum Startbildschirm
+       hinzugefügt wurde — Safari auf dem iPhone ignoriert das komplett.
+       Dieser CSS-Hinweis greift deshalb überall zusätzlich, auch im
+       normalen Browser-Tab: Sobald das Gerät quer liegt, wird die
+       eigentliche App verdeckt und zum Zurückdrehen aufgefordert. */
+    #orientation-lock-overlay {
+      display: none;
+    }
+    @media (orientation: landscape) {
+      #orientation-lock-overlay {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #0f172a;
+        color: #fff;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        font-size: 1.1rem;
+      }
+      #app-root {
+        display: none;
+      }
+    }
     :root {
       --bg: #0f172a;
       --card-bg: #1e293b;
@@ -978,7 +1006,12 @@
 </head>
 <body>
 
-  <div class="container">
+  <div id="orientation-lock-overlay">
+    <div style="font-size: 2.5rem; margin-bottom: 12px;">📱↻</div>
+    <div>Bitte das Gerät ins Hochformat drehen.</div>
+  </div>
+
+  <div id="app-root" class="container">
     <header>
       <button id="header-back-btn" style="display: none;" onclick="goHome()">‹</button>
       <h1 id="app-header-title">Tf-Assistent</h1>
@@ -1287,6 +1320,9 @@
         </div>
 
         <div id="fb-view-strecken" style="display: none;">
+          <div class="fb-shift-entry-detail" style="margin-bottom: 10px;">
+            💡 Tipp: Eine Strecke antippen und aufklappen → dort kannst du ihr optional eine <strong>Kategorie</strong> geben (z. B. „Würzburg → München"). Strecken mit gleicher Kategorie werden dann automatisch zu einer Gruppe mit gemeinsamem Durchschnitt zusammengefasst.
+          </div>
           <div class="form-group" id="fb-route-search-wrap" style="margin-bottom: 10px; display: none;">
             <input type="text" id="fb-route-search" placeholder="Suche nach Ort oder Code (z. B. München oder MLR)" oninput="fbRenderRoutes()" autocomplete="off">
           </div>
