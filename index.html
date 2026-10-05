@@ -856,8 +856,7 @@
 
     .fb-route-row-compact {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      align-items: flex-start;
       gap: 8px;
       padding: 10px 12px;
       cursor: pointer;
@@ -868,23 +867,28 @@
       color: var(--text-muted);
       font-size: 0.7rem;
       width: 12px;
+      margin-top: 3px;
     }
 
-    .fb-route-title-compact {
-      font-size: 0.85rem;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .fb-route-text-compact {
       flex: 1;
       min-width: 0;
     }
 
+    /* Voller Name, kein Abschneiden mit "…" mehr — bricht bei Bedarf um,
+       statt ausgerechnet am entscheidenden Wort gekürzt zu werden. */
+    .fb-route-title-compact {
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: normal;
+      overflow-wrap: break-word;
+    }
+
     .fb-route-avg-compact {
-      font-size: 0.78rem;
+      display: block;
+      font-size: 0.75rem;
       color: var(--text-muted);
-      flex-shrink: 0;
-      white-space: nowrap;
+      margin-top: 2px;
     }
 
     .fb-route-detail-expanded {
@@ -2289,8 +2293,10 @@
           <div class="fb-route-entry-compact">
             <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
               <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
-              <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
-              <span class="fb-route-avg-compact">${avgText}</span>
+              <div class="fb-route-text-compact">
+                <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+                <span class="fb-route-avg-compact">${avgText}</span>
+              </div>
             </div>
             ${detail}
           </div>
