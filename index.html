@@ -905,6 +905,55 @@
       cursor: pointer;
     }
 
+    .fb-route-kategorie-input {
+      margin-top: 4px;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    /* Kategorie-Gruppe (Idee A): bewusst KEINE eigene Karte/Box um die Gruppe
+       — nur eine dünne, antippbare Überschriftszeile. Die enthaltenen
+       Strecken bleiben ganz normale fb-route-entry-compact-Karten in voller
+       Breite, nur mit einem schmalen linken Rahmen eingerückt statt in einer
+       zweiten Box verschachtelt (das hatte beim ersten Versuch Titel
+       abgeschnitten und die Optik verschlechtert). */
+    .fb-route-group-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 4px;
+      cursor: pointer;
+    }
+
+    .fb-route-group-heading-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .fb-route-group-members {
+      border-left: 2px solid var(--border);
+      padding-left: 8px;
+      margin: 0 0 6px 4px;
+    }
+
+    .fb-route-group-dissolve-link {
+      display: block;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-decoration: underline;
+      padding: 2px 0 8px 4px;
+      cursor: pointer;
+    }
+
 
 
     .fb-footer-actions {
@@ -1279,6 +1328,9 @@
         </div>
 
         <div id="fb-view-strecken" style="display: none;">
+          <div class="fb-shift-entry-detail" style="margin-bottom: 10px;">
+            💡 Strecke aufklappen, um ihr optional eine Kategorie zu geben (z. B. „Würzburg → München") — gleich benannte Strecken werden dann zusammengefasst.
+          </div>
           <div class="form-group" id="fb-route-search-wrap" style="margin-bottom: 10px; display: none;">
             <input type="text" id="fb-route-search" placeholder="Suche nach Ort oder Code (z. B. München oder MLR)" oninput="fbRenderRoutes()" autocomplete="off">
           </div>
@@ -2139,9 +2191,12 @@
       } catch (e) {
         fbRoutes = [];
       }
-      // Ältere Strecken (vor Einführung der dauerhaften Historie) bekommen
-      // ein leeres fahrten-Array, damit fbSyncRoutes() sie befüllen kann.
-      fbRoutes.forEach(r => { if (!r.fahrten) r.fahrten = []; });
+      // Ältere Strecken (vor Einführung der dauerhaften Historie bzw. der
+      // Kategorie) bekommen Default-Werte nachgetragen.
+      fbRoutes.forEach(r => {
+        if (!r.fahrten) r.fahrten = [];
+        if (r.kategorie === undefined) r.kategorie = '';
+      });
     }
 
     function fbSaveRoutes() {
@@ -2217,13 +2272,88 @@
       streckenBtn.classList.toggle('active', zeigeStrecken);
     }
 
-    // Welche Strecken (per Index in fbRoutes) gerade aufgeklappt sind. Bleibt
-    // nur für die laufende Sitzung im Speicher, kein Persistierungsbedarf.
+    // Welche Strecken (per Index in fbRoutes) bzw. welche Kategorien gerade
+    // aufgeklappt sind. Bleibt nur für die laufende Sitzung im Speicher, kein
+    // Persistierungsbedarf.
     let fbRoutesExpanded = new Set();
+    let fbGroupsExpanded = new Set();
 
     function fbToggleRouteExpand(i) {
       if (fbRoutesExpanded.has(i)) fbRoutesExpanded.delete(i); else fbRoutesExpanded.add(i);
       fbRenderRoutes();
+    }
+
+    function fbToggleGroupExpand(kategorie) {
+      if (fbGroupsExpanded.has(kategorie)) fbGroupsExpanded.delete(kategorie); else fbGroupsExpanded.add(kategorie);
+      fbRenderRoutes();
+    }
+
+    // Kategorie ist rein optional und frei vergeben (z. B. "Würzburg →
+    // München") — Strecken mit identischem Kategorie-Text werden in der
+    // Liste unter einer gemeinsamen, schlanken Überschriftszeile (ohne
+    // eigene Box) mit kombiniertem Ø zusammengefasst. Ohne Kategorie bleibt
+    // eine Strecke wie bisher einzeln stehen.
+    function fbSetRouteKategorie(i, value) {
+      fbRoutes[i].kategorie = value.trim();
+      fbSaveRoutes();
+      fbRenderRoutes();
+    }
+
+    function fbDissolveGroup(kategorie) {
+      if (!confirm(`Kategorie "${kategorie}" von allen zugehörigen Strecken entfernen? Die Strecken selbst bleiben erhalten, nur die Gruppierung verschwindet.`)) return;
+      fbRoutes.forEach(r => { if ((r.kategorie || '').trim() === kategorie) r.kategorie = ''; });
+      fbGroupsExpanded.delete(kategorie);
+      fbSaveRoutes();
+      fbRenderRoutes();
+    }
+
+    function fbRouteMatchesSearch(i, q) {
+      if (!q) return true;
+      const r = fbRoutes[i];
+      return r.vonName.toLowerCase().includes(q) ||
+             r.bisName.toLowerCase().includes(q) ||
+             r.von.toLowerCase().includes(q) ||
+             r.bis.toLowerCase().includes(q) ||
+             (r.kategorie || '').toLowerCase().includes(q);
+    }
+
+    function fbRouteDetailHtml(route, i) {
+      const fahrten = route.fahrten;
+      let statsHtml;
+      if (fahrten.length === 0) {
+        statsHtml = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
+      } else {
+        const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
+        const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
+        statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
+      }
+      return `
+        <div class="fb-route-detail-expanded">
+          ${statsHtml}
+          <input type="text" class="fb-route-kategorie-input" placeholder="Kategorie (optional, z. B. Würzburg → München)" value="${bstEscapeHtml(route.kategorie || '')}" onclick="event.stopPropagation()" onchange="fbSetRouteKategorie(${i}, this.value)">
+          <button class="fb-route-delete-btn-inline" onclick="event.stopPropagation(); fbRemoveRoute(${i})">🗑 Strecke entfernen</button>
+        </div>
+      `;
+    }
+
+    function fbRenderRouteCard(i) {
+      const route = fbRoutes[i];
+      const fahrten = route.fahrten;
+      const expanded = fbRoutesExpanded.has(i);
+      const avgText = fahrten.length > 0
+        ? `Ø ${fbFormatDuration(fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length)}`
+        : 'noch keine Fahrt';
+      const detail = expanded ? fbRouteDetailHtml(route, i) : '';
+      return `
+        <div class="fb-route-entry-compact">
+          <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
+            <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
+            <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
+            <span class="fb-route-avg-compact">${avgText}</span>
+          </div>
+          ${detail}
+        </div>
+      `;
     }
 
     function fbRenderRoutes() {
@@ -2241,58 +2371,58 @@
 
       const searchEl = document.getElementById('fb-route-search');
       const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-      const indices = fbRoutes
-        .map((route, i) => i)
-        .filter(i => {
-          if (!q) return true;
-          const r = fbRoutes[i];
-          return r.vonName.toLowerCase().includes(q) ||
-                 r.bisName.toLowerCase().includes(q) ||
-                 r.von.toLowerCase().includes(q) ||
-                 r.bis.toLowerCase().includes(q);
-        });
 
-      if (indices.length === 0) {
+      // Nach Kategorie gruppieren (nicht-leer); Rest bleibt einzeln wie bisher.
+      const groups = new Map(); // kategorie -> [indices]
+      const standalone = [];
+      fbRoutes.forEach((r, i) => {
+        const kat = (r.kategorie || '').trim();
+        if (kat) {
+          if (!groups.has(kat)) groups.set(kat, []);
+          groups.get(kat).push(i);
+        } else {
+          standalone.push(i);
+        }
+      });
+
+      const blocks = [];
+      groups.forEach((indices, kat) => {
+        const treffer = q === '' || kat.toLowerCase().includes(q) || indices.some(i => fbRouteMatchesSearch(i, q));
+        if (treffer) blocks.push({ type: 'group', kategorie: kat, indices, sortKey: kat.toLowerCase() });
+      });
+      standalone.forEach(i => {
+        if (fbRouteMatchesSearch(i, q)) blocks.push({ type: 'route', index: i, sortKey: (fbRoutes[i].vonName + fbRoutes[i].bisName).toLowerCase() });
+      });
+      blocks.sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'de'));
+
+      if (blocks.length === 0) {
         listEl.innerHTML = '<div class="bst-empty">Keine Strecke gefunden.</div>';
         return;
       }
 
-      listEl.innerHTML = indices.map(i => {
-        const route = fbRoutes[i];
-        const fahrten = route.fahrten;
-        const expanded = fbRoutesExpanded.has(i);
-        const avgText = fahrten.length > 0
-          ? `Ø ${fbFormatDuration(fahrten.reduce((sum, t) => sum + t.fahrzeitMs, 0) / fahrten.length)}`
+      listEl.innerHTML = blocks.map(b => {
+        if (b.type === 'route') return fbRenderRouteCard(b.index);
+
+        // Gruppe: NUR eine dünne Überschriftszeile, keine eigene Box. Die
+        // Mitglieder sind ganz normale, volle Routen-Karten, nur mit einem
+        // schmalen linken Rahmen eingerückt statt verschachtelt.
+        const expanded = fbGroupsExpanded.has(b.kategorie);
+        const alleFahrten = b.indices.flatMap(i => fbRoutes[i].fahrten);
+        const avgText = alleFahrten.length > 0
+          ? `Ø ${fbFormatDuration(alleFahrten.reduce((s, t) => s + t.fahrzeitMs, 0) / alleFahrten.length)}`
           : 'noch keine Fahrt';
-
-        let detail = '';
-        if (expanded) {
-          let statsHtml;
-          if (fahrten.length === 0) {
-            statsHtml = '<div class="fb-shift-entry-detail">Noch keine passende Fahrt aufgezeichnet.</div>';
-          } else {
-            const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
-            const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
-            statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
-          }
-          detail = `
-            <div class="fb-route-detail-expanded">
-              ${statsHtml}
-              <button class="fb-route-delete-btn-inline" onclick="event.stopPropagation(); fbRemoveRoute(${i})">🗑 Strecke entfernen</button>
-            </div>
-          `;
-        }
-
-        return `
-          <div class="fb-route-entry-compact">
-            <div class="fb-route-row-compact" onclick="fbToggleRouteExpand(${i})">
-              <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
-              <span class="fb-route-title-compact">${bstEscapeHtml(route.vonName)} → ${bstEscapeHtml(route.bisName)}</span>
-              <span class="fb-route-avg-compact">${avgText}</span>
-            </div>
-            ${detail}
+        const katAttr = b.kategorie.replace(/'/g, "\\'");
+        const heading = `
+          <div class="fb-route-group-heading" onclick="fbToggleGroupExpand('${katAttr}')">
+            <span class="fb-route-chevron">${expanded ? '▾' : '▸'}</span>
+            <span class="fb-route-group-heading-title">📁 ${bstEscapeHtml(b.kategorie)}</span>
+            <span class="fb-route-avg-compact">${avgText} · ${b.indices.length} Strecke${b.indices.length === 1 ? '' : 'n'}</span>
           </div>
         `;
+        if (!expanded) return heading;
+        const members = `<div class="fb-route-group-members">${b.indices.map(i => fbRenderRouteCard(i)).join('')}</div>`;
+        const dissolve = `<button class="fb-route-group-dissolve-link" onclick="event.stopPropagation(); fbDissolveGroup('${katAttr}')">Kategorie auflösen</button>`;
+        return heading + members + dissolve;
       }).join('');
     }
 
@@ -2369,7 +2499,7 @@
         document.getElementById('fb-route-picker-list').innerHTML = '';
         fbRoutePickerRows = [];
       } else {
-        fbRoutes.push({ von: fbRoutePickerVon.code, vonName: fbRoutePickerVon.name, bis: code, bisName: name, fahrten: [] });
+        fbRoutes.push({ von: fbRoutePickerVon.code, vonName: fbRoutePickerVon.name, bis: code, bisName: name, fahrten: [], kategorie: '' });
         fbSaveRoutes();
         fbCloseRouteAdd();
         fbRenderRoutes();
