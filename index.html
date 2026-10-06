@@ -1322,12 +1322,13 @@
 
         <div id="fb-older-wrap" style="display: none;">
           <div class="fb-log-header" style="margin-top: 20px;">
-            <span>Frühere Schichten</span>
+            <span>Frühere Fahrten</span>
           </div>
           <div id="fb-older-list"></div>
         </div>
 
         <div class="fb-footer-actions">
+          <button class="btn-add" onclick="fbExportAllShifts()">📤 Alle Fahrten exportieren</button>
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
         </div>
         </div>
@@ -2692,7 +2693,7 @@
               </div>
               <div class="fb-shift-entry-detail">${routeTxt}</div>
               <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
-              <details class="fb-shift-segments">
+              <details class="fb-shift-segments" ontoggle="this.firstElementChild.textContent = this.open ? 'Abschnitte ausblenden' : 'Abschnitte anzeigen'">
                 <summary>Abschnitte anzeigen</summary>
                 ${fbRenderSegmentListFlat(shift.segments)}
               </details>
@@ -2899,6 +2900,28 @@
 
     // Exportiert genau EINE Schicht (per Index in fbBuildShifts()) als Textdatei.
     // shiftIndex === null -> aktuelle/letzte Schicht.
+    // Baut den reinen Text-Block für EINE Schicht (ohne Datei-Header) — von
+    // fbExportShift() (Einzel-Export) UND fbExportAllShifts() (Sammel-Export)
+    // gemeinsam genutzt, damit beide Exporte immer identisch formatiert sind.
+    function fbShiftReportText(shift) {
+      const vonTxt = fbFormatDateTime(shift.start.time);
+      const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
+      const lastEntry = shift.entries[shift.entries.length - 1];
+      const routeTxt = `${shift.start.ort.name} → ${lastEntry.ort.name}`;
+
+      let text = `Schichtbericht — ${vonTxt} bis ${bisTxt}\n`;
+      text += `Strecke: ${routeTxt}\n`;
+      text += '='.repeat(40) + '\n\n';
+      shift.segments.forEach(s => {
+        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
+      });
+      text += '\n' + '-'.repeat(40) + '\n';
+      text += `Fahrzeit:  ${fbFormatDuration(shift.fahrzeitMs)}\n`;
+      text += `Standzeit: ${fbFormatDuration(shift.stehzeitMs)}\n`;
+      if (shift.open) text += '\n(Schicht noch nicht beendet — Stand bei Export)\n';
+      return text;
+    }
+
     function fbExportShift(shiftIndex) {
       const shifts = fbBuildShifts();
       if (shifts.length === 0) {
@@ -2912,22 +2935,7 @@
         return;
       }
 
-      const vonTxt = fbFormatDateTime(shift.start.time);
-      const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
-      const lastEntry = shift.entries[shift.entries.length - 1];
-      const routeTxt = `${shift.start.ort.name} → ${lastEntry.ort.name}`;
-
-      let text = `Schichtbericht — ${vonTxt} bis ${bisTxt}\n`;
-      text += `Strecke: ${routeTxt}\n`;
-      text += `Tf-Assistent, ${window.location.href}\n`;
-      text += '='.repeat(40) + '\n\n';
-      shift.segments.forEach(s => {
-        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
-      });
-      text += '\n' + '-'.repeat(40) + '\n';
-      text += `Fahrzeit:  ${fbFormatDuration(shift.fahrzeitMs)}\n`;
-      text += `Standzeit: ${fbFormatDuration(shift.stehzeitMs)}\n`;
-      if (shift.open) text += '\n(Schicht noch nicht beendet — Stand bei Export)\n';
+      const text = `Tf-Assistent, ${window.location.href}\n\n` + fbShiftReportText(shift);
 
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -2935,6 +2943,35 @@
       const fileDate = new Date(shift.start.time).toISOString().slice(0, 10);
       a.href = url;
       a.download = `Schicht_${fileDate}_${fbFormatTime(shift.start.time).replace(':', '')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Sammel-Export: ALLE gespeicherten Schichten (mit abgeschlossenen
+    // Abschnitten) in einer einzigen Textdatei hintereinander, getrennt durch
+    // eine deutliche Trennzeile — z. B. für einen Monatsüberblick oder um
+    // alles auf einmal zu sichern/weiterzugeben.
+    function fbExportAllShifts() {
+      const shifts = fbBuildShifts().filter(s => s.segments.length > 0);
+      if (shifts.length === 0) {
+        alert('Noch keine Schicht mit abgeschlossenen Abschnitten vorhanden.');
+        return;
+      }
+
+      let text = `Tf-Assistent — Sammelexport aller Fahrten (${shifts.length} Schicht${shifts.length === 1 ? '' : 'en'})\n`;
+      text += `${window.location.href}\n`;
+      text += `Exportiert: ${fbFormatDateTime(new Date().toISOString())}\n`;
+      text += '#'.repeat(40) + '\n\n';
+      text += shifts.map(fbShiftReportText).join('\n' + '#'.repeat(40) + '\n\n');
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const datum = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `Fahrtenbuch_Sammelexport_${datum}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
