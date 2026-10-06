@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tf-Assistent</title>
   
-  <!-- Einstellungen für Web-App  / PWA -->
+  <!-- Einstellungen für Web-App / PWA -->
   <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1276,6 +1276,7 @@
         </div>
 
         <div id="fb-edit-link-wrap" style="text-align: right; margin-top: -6px; margin-bottom: 10px; display: none;">
+          <span id="fb-collapse-link" class="fb-edit-link" style="margin-right: 14px; display: none;" onclick="fbCollapseCurrentShift()">✓ Fertig</span>
           <span class="fb-edit-link" onclick="fbOpenEdit()">✏️ Bearbeiten</span>
         </div>
 
@@ -1542,6 +1543,7 @@
       // Fahrtenbuch-Log aus vorheriger Sitzung laden
       fbLoad();
       fbLoadRoutes();
+      fbLoadCollapsed();
       fbUpdateBadge();
     });
 
@@ -2032,7 +2034,44 @@
     // zurückgesetzt — eine Schicht soll über mehrere App-Besuche bestehen bleiben.
     const FB_STORAGE_KEY = 'tfFahrtenbuchLog';
     const FB_ROUTES_KEY = 'tfFahrtenbuchRoutes';
+    const FB_COLLAPSED_KEY = 'tfFahrtenbuchCollapsedShift';
     let fbLog = []; // flache Liste: {type: 'start'|'stopp'|'ende', time, ort}
+    // Start-Zeit (ISO) der abgeschlossenen Schicht, die der Nutzer per "✓ Fertig"
+    // vorzeitig in "Frühere Schichten" einsortiert hat, statt zu warten, bis die
+    // nächste Schicht beginnt. Eindeutig genug als Schlüssel, da Schichten sich
+    // nicht überlappen. null = nichts manuell eingeklappt.
+    let fbCollapsedShiftStart = null;
+
+    function fbLoadCollapsed() {
+      try {
+        fbCollapsedShiftStart = localStorage.getItem(FB_COLLAPSED_KEY) || null;
+      } catch (e) {
+        fbCollapsedShiftStart = null;
+      }
+    }
+
+    // Wird vor jedem neuen Log-Eintrag aufgerufen: beginnt der Eintrag eine
+    // brandneue Schicht (Log leer oder letzter Eintrag war "ende"), wird ein
+    // evtl. gesetzter "✓ Fertig"-Marker der vorherigen Schicht aufgeräumt —
+    // der ist dann ohnehin hinfällig, weil die Schicht automatisch nach unten
+    // wandert, sobald eine neue beginnt.
+    function fbMaybeClearCollapsedOnNewShift() {
+      if (fbLog.length === 0 || fbLog[fbLog.length - 1].type === 'ende') {
+        fbCollapsedShiftStart = null;
+        try { localStorage.removeItem(FB_COLLAPSED_KEY); } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+      }
+    }
+
+    function fbCollapseCurrentShift() {
+      const shifts = fbBuildShifts();
+      const shift = shifts[shifts.length - 1];
+      if (!shift || shift.open) return;
+      fbCollapsedShiftStart = shift.start.time;
+      try {
+        localStorage.setItem(FB_COLLAPSED_KEY, fbCollapsedShiftStart);
+      } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+      fbRender();
+    }
     let fbPickerPurpose = null; // 'start' | 'stopp' | 'ende' — welcher Eintragstyp als nächstes gespeichert wird
     let fbPickerCandidates = [];
 
@@ -2291,7 +2330,7 @@
           const maxMs = Math.max(...alleFahrten.map(t => t.fahrzeitMs));
           summaryHtml = `
             <div class="fb-route-search-summary">
-              ${indices.length} Strecke${indices.length === 1 ? '' : 'n'} gefunden · Ø kombiniert: ${fbFormatDuration(avgMs)}<br>
+              Ø ${fbFormatDuration(avgMs)} · ${indices.length} Strecke${indices.length === 1 ? '' : 'n'} gefunden<br>
               Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${alleFahrten.length} Fahrt${alleFahrten.length === 1 ? '' : 'en'} gesamt)
             </div>
           `;
@@ -2534,16 +2573,27 @@
       }
 
       const shifts = fbBuildShifts();
-      const currentShift = shifts.length > 0 ? shifts[shifts.length - 1] : null;
-      const olderShifts = shifts.length > 1 ? shifts.slice(0, -1).reverse() : [];
+      const lastShift = shifts.length > 0 ? shifts[shifts.length - 1] : null;
+      // Per "✓ Fertig" vorzeitig eingeklappte Schicht: zählt für die obere
+      // Anzeige als "nicht vorhanden" (verschwindet aus dem Blick, bis die
+      // nächste Schicht beginnt), taucht aber sofort unten bei den früheren
+      // Schichten auf — dort ohne Bearbeiten-Möglichkeit, wie alle anderen.
+      const isCollapsed = !!(lastShift && !lastShift.open && fbCollapsedShiftStart === lastShift.start.time);
+      const currentShift = isCollapsed ? null : lastShift;
+      const olderShifts = isCollapsed
+        ? shifts.slice().reverse()
+        : (shifts.length > 1 ? shifts.slice(0, -1).reverse() : []);
+      const olderIndexOffset = isCollapsed ? 1 : 2; // für die Rückrechnung auf den Index in "shifts"
 
       document.getElementById('fb-log-title').textContent =
-        currentShift && currentShift.open ? 'Aktuelle Schicht' : 'Letzte Schicht';
+        currentShift && currentShift.open ? 'Aktuelle Schicht' : (currentShift ? 'Letzte Schicht' : 'Keine aktuelle Schicht');
 
       const logEl = document.getElementById('fb-log');
       const routeEl = document.getElementById('fb-route');
       document.getElementById('fb-edit-link-wrap').style.display =
         (currentShift && currentShift.entries.length > 1) ? 'block' : 'none';
+      document.getElementById('fb-collapse-link').style.display =
+        (currentShift && !currentShift.open) ? 'inline' : 'none';
       if (!currentShift || currentShift.segments.length === 0) {
         logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
         document.getElementById('fb-totals').textContent = '';
@@ -2565,7 +2615,7 @@
       } else {
         olderWrap.style.display = 'block';
         document.getElementById('fb-older-list').innerHTML = olderShifts.map((shift, idx) => {
-          const realIndex = shifts.length - 2 - idx; // Index in "shifts" (chronologisch)
+          const realIndex = shifts.length - olderIndexOffset - idx; // Index in "shifts" (chronologisch)
           const vonTxt = fbFormatDateTime(shift.start.time);
           const bisTxt = shift.end ? fbFormatDateTime(shift.end.time) : 'läuft noch';
           const lastEntry = shift.entries[shift.entries.length - 1];
@@ -2691,6 +2741,7 @@
 
     function fbSelectDefaultOrt() {
       if (!fbPickerDefaultOrt) return;
+      fbMaybeClearCollapsedOnNewShift();
       fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { ...fbPickerDefaultOrt } });
       fbSave();
       fbClosePicker();
@@ -2757,6 +2808,7 @@
     function fbSelectFreitext() {
       const text = document.getElementById('fb-picker-search').value.trim();
       if (!text) return;
+      fbMaybeClearCollapsedOnNewShift();
       fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code: text, name: text } });
       fbSave();
       fbClosePicker();
@@ -2767,6 +2819,7 @@
       const row = fbPickerRenderedRows[i];
       if (!row) return;
       const [code, name] = row;
+      fbMaybeClearCollapsedOnNewShift();
       fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code, name } });
       fbSave();
       fbClosePicker();
