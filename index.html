@@ -2311,6 +2311,14 @@
           const r = fbRoutes[i];
           const haystack = `${r.vonName} ${r.bisName} ${r.von} ${r.bis}`.toLowerCase();
           return terms.every(t => haystack.includes(t));
+        })
+        // Alphabetisch nach Von-Ort (dann Bis-Ort als Tiebreaker) statt nach
+        // Einfüge-Reihenfolge — so stehen zusammengehörige Strecken (gleicher
+        // Startort, egal welcher genaue Bahnhofsteil) automatisch beieinander,
+        // ganz ohne manuelle Kategorie.
+        .sort((a, b) => {
+          const ra = fbRoutes[a], rb = fbRoutes[b];
+          return ra.vonName.localeCompare(rb.vonName, 'de') || ra.bisName.localeCompare(rb.bisName, 'de');
         });
 
       if (indices.length === 0) {
