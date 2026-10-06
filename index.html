@@ -837,13 +837,47 @@
     }
 
     .fb-shift-export-btn {
-      font-size: 0.75rem;
-      padding: 6px 10px;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      padding: 0;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--card-bg);
-      color: var(--text);
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 1rem;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Schwebender "Nach oben"-Button — nur sichtbar, sobald weit genug runter-
+       gescrollt wurde (siehe scroll-Listener weiter unten im Script), damit
+       man bei langen Listen (z. B. viele beobachtete Strecken) nicht mühsam
+       zurückscrollen muss. */
+    #scroll-top-btn {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 500;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 1.3rem;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    #scroll-top-btn.visible {
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .fb-route-search-summary {
@@ -986,6 +1020,8 @@
     <div style="font-size: 2.5rem; margin-bottom: 12px;">📱↻</div>
     <div>Bitte das Gerät ins Hochformat drehen.</div>
   </div>
+
+  <button id="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="Nach oben" aria-label="Nach oben">↑</button>
 
   <div id="app-root" class="container">
     <header>
@@ -1503,6 +1539,10 @@
       };
       reader.readAsText(file);
     }
+
+    window.addEventListener('scroll', () => {
+      document.getElementById('scroll-top-btn').classList.toggle('visible', window.scrollY > 400);
+    });
 
     function goHome() {
       if (currentModule) resetModuleState(currentModule);
@@ -2484,6 +2524,22 @@
       `).join('');
     }
 
+    // Variante für frühere (abgeschlossene) Schichten: komplett ausgeschrieben,
+    // kein Antippen pro Abschnitt nötig, um Von/Bis zu sehen — anders als bei
+    // der aktuellen Schicht, wo die einklappbare Liste bleibt. Zeigt Datum nur
+    // einmal (nicht doppelt wie vorher mit Uhrzeit UND vollem Datum getrennt).
+    function fbRenderSegmentListFlat(segments) {
+      return segments.slice().reverse().map(s => `
+        <div class="fb-log-entry fb-log-${s.art === 'Fahrt' ? 'fahrt' : 'stand'}">
+          <div class="fb-log-entry-top" style="cursor: default;">
+            <span>${s.art}</span>
+            <span>${fbFormatDuration(s.dauerMs)}</span>
+          </div>
+          <div class="fb-log-entry-detail">${fbFormatDateTime(s.zeitVon)} ${s.von} → ${fbFormatDateTime(s.zeitBis)} ${s.bis}</div>
+        </div>
+      `).join('');
+    }
+
     // Liefert eine kurze Bezeichnung für einen Log-Eintrag je nach Typ/Position,
     // damit die Edit-Liste verständlich ist ("Abfahrt", "Stopp", "Weiterfahrt", "Ankunft").
     function fbEntryLabel(entry, idx) {
@@ -2632,13 +2688,13 @@
             <div class="fb-shift-entry">
               <div class="fb-shift-entry-top">
                 <span>${vonTxt} → ${bisTxt}</span>
-                <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})">Exportieren</button>
+                <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})" title="Exportieren" aria-label="Exportieren">📤</button>
               </div>
               <div class="fb-shift-entry-detail">${routeTxt}</div>
               <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
               <details class="fb-shift-segments">
                 <summary>Abschnitte anzeigen</summary>
-                ${fbRenderSegmentList(shift.segments)}
+                ${fbRenderSegmentListFlat(shift.segments)}
               </details>
             </div>
           `;
