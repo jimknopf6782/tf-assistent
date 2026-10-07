@@ -1051,7 +1051,7 @@
     <header>
       <button id="header-back-btn" style="display: none;" onclick="goHome()">‹</button>
       <h1 id="app-header-title">Tf-Assistent</h1>
-      <button id="header-settings-btn" onclick="appOpenSettings()" title="Einstellungen" aria-label="Einstellungen">⋮</button>
+      <button id="header-settings-btn" style="display: none;" onclick="appOpenSettings()" title="Datensicherung" aria-label="Datensicherung">⋮</button>
     </header>
 
     <!-- Startbildschirm: Kachel-Navigation -->
@@ -1127,36 +1127,6 @@
           </span>
           <span class="home-tile-label">Zeitdifferenz</span>
         </button>
-      </div>
-
-      <!-- Export/Import aller App-Daten (gesamtes localStorage, gilt automatisch
-           auch für zukünftige Module) — Einstieg über das Zahnrad im Header. -->
-      <div id="settings-panel" style="display: none;">
-        <div class="fb-log-header"><span>Daten sichern</span></div>
-        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
-          Exportiert alle in dieser App gespeicherten Daten (Fahrtenbuch, beobachtete Strecken, Einstellungen) als Datei — zum Sichern oder zum Übertragen auf ein neues Gerät.
-        </div>
-        <div class="fb-footer-actions">
-          <button class="btn-add" onclick="appExportData()">📤 Daten exportieren</button>
-        </div>
-        <div class="fb-footer-actions">
-          <button class="btn-add" onclick="appTriggerImport()">📥 Daten importieren</button>
-        </div>
-        <input type="file" id="app-import-file" accept=".json,application/json" style="display: none;" onchange="appImportFile(event)">
-
-        <div class="fb-log-header" style="margin-top: 26px;"><span>Automatische Sicherung</span></div>
-        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
-          Deine Fahrten und Strecken werden in deinem eigenen Google Drive gesichert.
-        </div>
-        <div id="gdrive-status" class="fb-shift-entry-detail" style="margin-bottom: 10px; display: none;"></div>
-        <div class="fb-footer-actions">
-          <button id="gdrive-btn-toggle" class="btn-add" onclick="gdriveToggle()">☁️ Sicherung in Google Drive einschalten</button>
-          <button id="gdrive-btn-now" class="btn-add" style="display: none;" onclick="gdriveBackup(true)">🔄 Jetzt sichern</button>
-          <button id="gdrive-btn-restore" class="btn-add" style="display: none;" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
-        </div>
-        <div class="fb-footer-actions" style="margin-top: 20px;">
-          <button class="btn-add" onclick="appCloseSettings()">Schließen</button>
-        </div>
       </div>
     </div>
 
@@ -1385,6 +1355,36 @@
 
       </div>
 
+      <!-- Export/Import aller App-Daten (gesamtes localStorage, gilt automatisch
+           auch für zukünftige Module) — Einstieg über die drei Punkte im Header des Fahrtenbuchs. -->
+      <div id="settings-panel" style="display: none;">
+        <div class="fb-log-header"><span>Daten sichern</span></div>
+        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
+          Exportiert alle in dieser App gespeicherten Daten (Fahrtenbuch, beobachtete Strecken, Einstellungen) als Datei — zum Sichern oder zum Übertragen auf ein neues Gerät.
+        </div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="appExportData()">📤 Daten exportieren</button>
+        </div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" onclick="appTriggerImport()">📥 Daten importieren</button>
+        </div>
+        <input type="file" id="app-import-file" accept=".json,application/json" style="display: none;" onchange="appImportFile(event)">
+
+        <div class="fb-log-header" style="margin-top: 26px;"><span>Automatische Sicherung</span></div>
+        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
+          Deine Fahrten und Strecken werden in deinem eigenen Google Drive gesichert.
+        </div>
+        <div id="gdrive-status" class="fb-shift-entry-detail" style="margin-bottom: 10px; display: none;"></div>
+        <div class="fb-footer-actions">
+          <button id="gdrive-btn-toggle" class="btn-add" onclick="gdriveToggle()">☁️ Sicherung in Google Drive einschalten</button>
+          <button id="gdrive-btn-now" class="btn-add" style="display: none;" onclick="gdriveBackup(true)">🔄 Jetzt sichern</button>
+          <button id="gdrive-btn-restore" class="btn-add" style="display: none;" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
+        </div>
+        <div class="fb-footer-actions" style="margin-top: 20px;">
+          <button class="btn-add" onclick="appCloseSettings()">Schließen</button>
+        </div>
+      </div>
+
       <!-- Standort-Auswahl (beim Abfahrt/Stopp/Weiterfahrt/Beenden) -->
       <div id="fb-picker" class="fb-picker" style="display: none;">
         <div class="fb-picker-title" id="fb-picker-title">Betriebsstelle wählen</div>
@@ -1452,7 +1452,9 @@
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       document.getElementById('header-back-btn').style.display = 'inline-block';
-      document.getElementById('header-settings-btn').style.display = 'none';
+      // Datensicherung (⋮) gibt es nur im Fahrtenbuch.
+      document.getElementById('header-settings-btn').style.display = name === 'fahrtenbuch' ? 'inline-block' : 'none';
+      appCloseSettings();
       document.getElementById('app-header-title').textContent = MODULE_TITLES[name] || 'Tf-Assistent';
       currentModule = name;
       if (name === 'zeit') zeitIstAktualisieren();
@@ -1509,14 +1511,18 @@
     // beschränkt — so landen auch künftige Module automatisch mit im Backup,
     // ohne dass diese Funktion je wieder angefasst werden muss.
     function appOpenSettings() {
-      document.querySelector('.home-grid').style.display = 'none';
+      fbClosePicker();
+      document.getElementById('fb-main').style.display = 'none';
       document.getElementById('settings-panel').style.display = '';
       gdriveRenderStatus();
+      window.scrollTo(0, 0);
     }
 
     function appCloseSettings() {
-      document.querySelector('.home-grid').style.display = '';
-      document.getElementById('settings-panel').style.display = 'none';
+      const panel = document.getElementById('settings-panel');
+      if (panel.style.display === 'none') return;
+      panel.style.display = 'none';
+      document.getElementById('fb-main').style.display = 'block';
     }
 
     // Sammelt alle App-Daten (ohne die geräte-spezifischen Google-Drive-Einstellungen).
@@ -1838,7 +1844,8 @@
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById('home-screen').classList.add('active');
       document.getElementById('header-back-btn').style.display = 'none';
-      document.getElementById('header-settings-btn').style.display = 'inline-block';
+      document.getElementById('header-settings-btn').style.display = 'none';
+      appCloseSettings();
       document.getElementById('app-header-title').textContent = 'Tf-Assistent';
       currentModule = null;
       fbUpdateBadge();
