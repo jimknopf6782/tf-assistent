@@ -731,6 +731,30 @@
       margin-bottom: 20px;
     }
 
+    .fb-btn-row-inner {
+      display: flex;
+      gap: 10px;
+    }
+
+    #fb-main-btn {
+      flex: 3;
+      min-width: 0;
+    }
+
+    .fb-ping-btn {
+      flex: 1;
+      min-width: 0;
+      padding: 18px 2px;
+      border: none;
+      border-radius: 12px;
+      white-space: nowrap;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      background-color: #0d9488;
+      cursor: pointer;
+    }
+
     .fb-log-header {
       display: flex;
       flex-direction: column;
@@ -1292,7 +1316,10 @@
         </div>
 
         <div id="fb-btn-row-single">
-          <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Starten</button>
+          <div class="fb-btn-row-inner">
+            <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Starten</button>
+            <button id="fb-ping-btn" class="fb-ping-btn" style="display: none;" onclick="fbPressButton('durch')" title="Durchfahrt ohne Halt markieren">📍 Durch</button>
+          </div>
         </div>
         <div id="fb-btn-row-double" style="display: none;">
           <button class="fb-main-btn fb-btn-start" style="margin-bottom: 10px;" onclick="fbPressButton('weiterfahrt')">Fortsetzen</button>
@@ -1330,6 +1357,7 @@
         <div class="fb-footer-actions">
           <button class="btn-add" onclick="fbExportAllShifts()">📤 Alle Fahrten exportieren</button>
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Fahrten löschen</button>
+          <div class="fb-shift-entry-detail" style="margin-top: 8px; text-align: center;">Die angelegten Strecken mit ihrer Statistik bleiben dabei erhalten.</div>
         </div>
         </div>
 
@@ -2134,7 +2162,7 @@
       } catch (e) { /* localStorage evtl. nicht verfügbar */ }
       fbRender();
     }
-    let fbPickerPurpose = null; // 'start' | 'stopp' | 'ende' — welcher Eintragstyp als nächstes gespeichert wird
+    let fbPickerPurpose = null; // 'start' | 'stopp' | 'durch' | 'ende' — welcher Eintragstyp als nächstes gespeichert wird
     let fbPickerCandidates = [];
 
     function fbLoad() {
@@ -2177,7 +2205,7 @@
       if (fbLog.length === 0) return 'idle';
       const lastType = fbLog[fbLog.length - 1].type;
       if (lastType === 'ende') return 'idle';
-      return lastType === 'start' ? 'fahrt' : 'stand';
+      return lastType === 'stopp' ? 'stand' : 'fahrt'; // 'start' und 'durch' = fährt
     }
 
     // Roter Punkt auf der Fahrtenbuch-Kachel im Hauptmenü, solange eine
@@ -2211,9 +2239,10 @@
           const dauerMs = new Date(b.time) - new Date(a.time);
           if (dauerMs <= 0) continue; // z.B. direkte Ankunft ohne Weiterfahrt — kein eigener Eintrag nötig
           segments.push({
-            art: a.type === 'start' ? 'Fahrt' : 'Stand',
+            art: a.type === 'stopp' ? 'Stand' : 'Fahrt', // 'start' und 'durch' = Fahrt
             von: a.ort.code,
             bis: b.ort.code,
+            bisDurch: b.type === 'durch',
             zeitVon: a.time,
             zeitBis: b.time,
             dauerMs
@@ -2288,12 +2317,13 @@
           while (i < entries.length) {
             // Von-Punkt: jede Abfahrt (erster Start oder Weiterfahrt nach
             // Zwischenstopp) am gesuchten Von-Ort.
-            if (entries[i].type !== 'start' || entries[i].ort.code !== route.von) { i++; continue; }
+            // (auch eine Durchfahrt zählt als Von-Punkt)
+            if ((entries[i].type !== 'start' && entries[i].type !== 'durch') || entries[i].ort.code !== route.von) { i++; continue; }
             // nächsten passenden Bis-Punkt danach suchen (Stopp oder Ende).
             let j = i + 1;
             let found = -1;
             while (j < entries.length) {
-              if ((entries[j].type === 'stopp' || entries[j].type === 'ende') && entries[j].ort.code === route.bis) {
+              if ((entries[j].type === 'stopp' || entries[j].type === 'ende' || entries[j].type === 'durch') && entries[j].ort.code === route.bis) {
                 found = j;
                 break;
               }
@@ -2304,7 +2334,7 @@
             // Zwischenstopps dazwischen nicht mitzählen).
             let fahrzeitMs = 0;
             for (let k = i; k < found; k++) {
-              if (entries[k].type !== 'start') continue;
+              if (entries[k].type === 'stopp') continue; // Standzeit nicht zählen ('start' und 'durch' = Fahrt)
               fahrzeitMs += new Date(entries[k + 1].time) - new Date(entries[k].time);
             }
             const schonErfasst = route.fahrten.some(f => f.datum === entries[i].time);
@@ -2451,6 +2481,9 @@
     }
 
     function fbRemoveRoute(i) {
+      const r = fbRoutes[i];
+      if (!r) return;
+      if (!confirm(`Strecke ${r.vonName || r.von} → ${r.bisName || r.bis} wirklich entfernen? Die gespeicherte Statistik (Ø/Min/Max) dieser Strecke geht dabei verloren.`)) return;
       fbRoutes.splice(i, 1);
       fbRoutesExpanded.clear(); // Indizes verschieben sich, aufgeklappte Zustände verwerfen
       fbSaveRoutes();
@@ -2540,7 +2573,7 @@
             <span>${s.art}</span>
             <span>${fbFormatDuration(s.dauerMs)}</span>
           </summary>
-          <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}</div>
+          <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' 📍 Durchfahrt' : ''}</div>
           <div class="fb-log-entry-detail fb-log-entry-exact">Von: ${fbFormatDateTime(s.zeitVon)} · Bis: ${fbFormatDateTime(s.zeitBis)}</div>
         </details>
       `).join('');
@@ -2557,7 +2590,7 @@
             <span>${s.art}</span>
             <span>${fbFormatDuration(s.dauerMs)}</span>
           </div>
-          <div class="fb-log-entry-detail">${fbFormatDateTime(s.zeitVon)} ${s.von} → ${fbFormatDateTime(s.zeitBis)} ${s.bis}</div>
+          <div class="fb-log-entry-detail">${fbFormatDateTime(s.zeitVon)} ${s.von} → ${fbFormatDateTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' 📍 Durchfahrt' : ''}</div>
         </div>
       `).join('');
     }
@@ -2567,6 +2600,7 @@
     function fbEntryLabel(entry, idx) {
       if (entry.type === 'ende') return 'Ankunft';
       if (entry.type === 'stopp') return 'Stopp';
+      if (entry.type === 'durch') return 'Durchfahrt';
       return idx === 0 ? 'Abfahrt' : 'Weiterfahrt';
     }
 
@@ -2630,6 +2664,8 @@
       const singleRow = document.getElementById('fb-btn-row-single');
       const doubleRow = document.getElementById('fb-btn-row-double');
       const mainBtn = document.getElementById('fb-main-btn');
+      const pingBtn = document.getElementById('fb-ping-btn');
+      pingBtn.style.display = status === 'fahrt' ? 'block' : 'none';
       const label = document.getElementById('fb-status-label');
       const detail = document.getElementById('fb-status-detail');
 
@@ -2639,12 +2675,15 @@
         mainBtn.textContent = 'Starten';
         mainBtn.className = 'fb-main-btn fb-btn-start';
         mainBtn.onclick = () => fbPressButton('abfahrt');
+        pingBtn.style.display = 'none';
         label.textContent = 'Bereit';
         detail.textContent = 'Noch keine Fahrt begonnen.';
       } else if (status === 'fahrt') {
         singleRow.style.display = 'block';
         doubleRow.style.display = 'none';
-        const last = fbLog[fbLog.length - 1];
+        // letzte Abfahrt (nicht die letzte Durchfahrt) als "seit"
+        let last = fbLog[fbLog.length - 1];
+        for (let k = fbLog.length - 1; k >= 0; k--) { if (fbLog[k].type === 'start') { last = fbLog[k]; break; } }
         mainBtn.textContent = 'Pause';
         mainBtn.className = 'fb-main-btn fb-btn-stop';
         mainBtn.onclick = () => fbPressButton('stopp');
@@ -2724,6 +2763,11 @@
       }
     }
 
+    let fbPickerPressTime = null;
+    function fbPickerEntryTime() {
+      // Durchfahrt: Zeit des Tastendrucks (man wählt den Ort erst danach aus)
+      return (fbPickerPurpose === 'durch' && fbPickerPressTime) ? fbPickerPressTime : new Date().toISOString();
+    }
     let fbPickerDefaultOrt = null; // Schnellzugriff "wie zuletzt" (z.B. bei Weiterfahrt)
 
     function fbPressButton(action) {
@@ -2752,15 +2796,17 @@
       // 'abfahrt' -> neuer 'start'-Eintrag (neue Schicht beginnt, Ort unbekannt -> Auswahl)
       // 'stopp' -> 'stopp'-Eintrag (Fahrt endet, Stand beginnt, Schicht läuft weiter)
       fbPickerDefaultOrt = null;
+      fbPickerPressTime = new Date().toISOString(); // Zeitpunkt des Tastendrucks (für die Durchfahrt)
       if (action === 'abfahrt') fbPickerPurpose = 'start';
       else if (action === 'stopp') fbPickerPurpose = 'stopp';
+      else if (action === 'durch') fbPickerPurpose = 'durch';
       fbOpenPicker();
     }
 
     function fbOpenPicker() {
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-picker').style.display = 'block';
-      const titles = { start: 'Ort wählen', stopp: 'Pause-Ort wählen', ende: 'End-Ort der Schicht wählen' };
+      const titles = { start: 'Ort wählen', stopp: 'Pause-Ort wählen', durch: 'Durchfahrt-Ort wählen', ende: 'End-Ort der Schicht wählen' };
       document.getElementById('fb-picker-title').textContent = titles[fbPickerPurpose] || 'Betriebsstelle wählen';
       document.getElementById('fb-picker-search').value = '';
       document.getElementById('fb-picker-list').innerHTML = '';
@@ -2828,7 +2874,7 @@
     function fbSelectDefaultOrt() {
       if (!fbPickerDefaultOrt) return;
       fbMaybeClearCollapsedOnNewShift();
-      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { ...fbPickerDefaultOrt } });
+      fbLog.push({ type: fbPickerPurpose, time: fbPickerEntryTime(), ort: { ...fbPickerDefaultOrt } });
       fbSave();
       fbClosePicker();
       fbRender();
@@ -2895,7 +2941,7 @@
       const text = document.getElementById('fb-picker-search').value.trim();
       if (!text) return;
       fbMaybeClearCollapsedOnNewShift();
-      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code: text, name: text } });
+      fbLog.push({ type: fbPickerPurpose, time: fbPickerEntryTime(), ort: { code: text, name: text } });
       fbSave();
       fbClosePicker();
       fbRender();
@@ -2906,14 +2952,14 @@
       if (!row) return;
       const [code, name] = row;
       fbMaybeClearCollapsedOnNewShift();
-      fbLog.push({ type: fbPickerPurpose, time: new Date().toISOString(), ort: { code, name } });
+      fbLog.push({ type: fbPickerPurpose, time: fbPickerEntryTime(), ort: { code, name } });
       fbSave();
       fbClosePicker();
       fbRender();
     }
 
     function fbResetLog() {
-      if (!confirm('Wirklich ALLE Schichten (aktuelle und frühere) komplett löschen? Die Strecken-Statistik (Ø/Min/Max) bleibt davon unberührt erhalten.')) return;
+      if (!confirm('Wirklich ALLE Fahrten (aktuelle und frühere) komplett löschen? Die Strecken-Statistik (Ø/Min/Max) bleibt davon unberührt erhalten.')) return;
       fbLog = [];
       fbSave();
       fbRender();
@@ -2934,7 +2980,7 @@
       text += `Strecke: ${routeTxt}\n`;
       text += '='.repeat(40) + '\n\n';
       shift.segments.forEach(s => {
-        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}  (${fbFormatDuration(s.dauerMs)})\n`;
+        text += `${s.art.padEnd(6)} ${fbFormatTime(s.zeitVon)} ${s.von} -> ${fbFormatTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' (Durchfahrt)' : ''}  (${fbFormatDuration(s.dauerMs)})\n`;
       });
       text += '\n' + '-'.repeat(40) + '\n';
       text += `Fahrzeit:  ${fbFormatDuration(shift.fahrzeitMs)}\n`;
