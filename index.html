@@ -1155,7 +1155,7 @@
       <div class="form-group">
         <label>Ist-Zeit:</label>
         <div class="time-inputs">
-          <input type="time" id="time2" onchange="berechneZeit()" onclick="try{this.showPicker()}catch(e){}">
+          <input type="time" id="time2" onchange="zeitIstAuto = false; berechneZeit()" onclick="try{this.showPicker()}catch(e){}">
         </div>
       </div>
 
@@ -1302,7 +1302,7 @@
         <div id="fb-log-wrap">
           <div class="fb-log-header">
             <div class="fb-log-header-top">
-              <span id="fb-log-title">Aktuelle Schicht</span>
+              <span id="fb-log-title">Aktuelle Fahrt</span>
               <span id="fb-gesamtzeit"></span>
             </div>
             <div id="fb-totals" class="fb-totals"></div>
@@ -1317,7 +1317,7 @@
         </div>
 
         <div class="fb-footer-actions">
-          <button class="btn-add" onclick="fbExportShift(null)">📄 Aktuelle Schicht exportieren (.txt)</button>
+          <button class="btn-add" onclick="fbExportShift(null)">📄 Aktuelle Fahrt exportieren (.txt)</button>
         </div>
 
         <div id="fb-older-wrap" style="display: none;">
@@ -1329,7 +1329,7 @@
 
         <div class="fb-footer-actions">
           <button class="btn-add" onclick="fbExportAllShifts()">📤 Alle Fahrten exportieren</button>
-          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Schichten löschen</button>
+          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Fahrten löschen</button>
         </div>
         </div>
 
@@ -1416,6 +1416,7 @@
       document.getElementById('header-settings-btn').style.display = 'none';
       document.getElementById('app-header-title').textContent = MODULE_TITLES[name] || 'Tf-Assistent';
       currentModule = name;
+      if (name === 'zeit') zeitIstAktualisieren();
       try {
         history.pushState({ module: name }, '', '#' + name);
       } catch (e) { historyApiWorks = false; /* z.B. in sandboxed Vorschauen nicht erlaubt — Modul bleibt trotzdem offen */ }
@@ -1436,6 +1437,7 @@
         document.getElementById('result-bremse').classList.remove('visible');
       } else if (name === 'zeit') {
         document.getElementById('time1').value = '';
+        zeitIstAuto = true;
         const now = new Date();
         document.getElementById('time2').value =
           `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -1616,6 +1618,25 @@
       resultVal.innerHTML = `${fErfGerundet} kN`;
       resultBox.classList.add('visible');
     }
+
+    // Rechner 2: Ist-Zeit läuft mit der Uhr mit, solange sie nicht von Hand
+    // geändert wurde. Aktualisierung beim Öffnen, beim Zurückkehren in die App
+    // und alle 15 Sekunden, solange das Modul offen ist.
+    let zeitIstAuto = true;
+    function zeitIstAktualisieren() {
+      if (!zeitIstAuto || currentModule !== 'zeit') return;
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const el = document.getElementById('time2');
+      if (el.value !== hhmm) {
+        el.value = hhmm;
+        berechneZeit();
+      }
+    }
+    setInterval(zeitIstAktualisieren, 15000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) zeitIstAktualisieren();
+    });
 
     // Rechner 2: Zeitdifferenz
     function berechneZeit() {
@@ -2651,7 +2672,7 @@
       const olderIndexOffset = isCollapsed ? 1 : 2; // für die Rückrechnung auf den Index in "shifts"
 
       document.getElementById('fb-log-title').textContent =
-        currentShift && currentShift.open ? 'Aktuelle Schicht' : (currentShift ? 'Letzte Schicht' : 'Keine aktuelle Schicht');
+        currentShift && currentShift.open ? 'Aktuelle Fahrt' : (currentShift ? 'Letzte Fahrt' : 'Keine aktuelle Fahrt');
 
       const logEl = document.getElementById('fb-log');
       const routeEl = document.getElementById('fb-route');
