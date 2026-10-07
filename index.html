@@ -1764,10 +1764,43 @@
         alert('Der Google-Zugang ist in dieser Version noch nicht eingerichtet.');
         return;
       }
+      let token;
       try {
-        await gdriveGetToken(true);
+        token = await gdriveGetToken(true);
       } catch (e) {
         gdriveNote = 'Anmeldung bei Google nicht abgeschlossen.';
+        gdriveRenderStatus();
+        return;
+      }
+      // Schutz vor versehentlichem Überschreiben: Liegt in Drive schon eine Sicherung
+      // (z. B. von einem anderen Gerät), wird zuerst gefragt, ob sie geladen werden soll.
+      try {
+        const id = await gdriveFindFile(token);
+        if (id) {
+          const res = await gdriveApi('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?alt=media', token);
+          if (!res.ok) throw new Error('download ' + res.status);
+          const parsed = await res.json();
+          if (parsed && typeof parsed.data === 'object') {
+            const datumText = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('de-DE') : 'unbekannt';
+            if (confirm(`Sicherung vom ${datumText} in Google Drive gefunden. Jetzt laden? Die Daten auf diesem Gerät werden ersetzt.`)) {
+              localStorage.setItem('tfGdriveEnabled', '1');
+              localStorage.setItem('tfGdriveFileId', id);
+              appClearKeepingDevice();
+              Object.keys(parsed.data).forEach(key => localStorage.setItem(key, parsed.data[key]));
+              alert('Sicherung geladen. Die App wird jetzt neu geladen.');
+              location.reload();
+              return;
+            }
+            if (!confirm('Sicherung in Google Drive mit den Daten dieses Geräts überschreiben?')) {
+              gdriveNote = 'Sicherung wurde nicht eingeschaltet.';
+              gdriveRenderStatus();
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        // Prüfung nicht möglich -> lieber nichts überschreiben
+        gdriveNote = 'Vorhandene Sicherung konnte nicht geprüft werden. Bitte Verbindung prüfen und erneut versuchen.';
         gdriveRenderStatus();
         return;
       }
@@ -3288,10 +3321,17 @@
 
       Promise.all([
         bstFetchJson('data/betriebsstellen.json'),
-        bstFetchJson('data/betriebsstellen-at.json')
+        bstFetchJson('data/betriebsstellen-at.json'),
+        // Eigene Ergänzungen (fehlende Stellen); optional — fehlt die Datei, geht es ohne.
+        bstFetchJson('data/betriebsstellen-eigene.json').catch(() => [])
       ])
-        .then(([deData, atData]) => {
+        .then(([deData, atData, eigeneData]) => {
           bstData = deData.concat(atData);
+          // Eigene Einträge nur ergänzen, wenn Code + Land nicht schon in den offiziellen Listen stehen.
+          const bekannt = new Set(bstData.map(r => r[5] + '|' + r[0].toLowerCase()));
+          (Array.isArray(eigeneData) ? eigeneData : []).forEach(r => {
+            if (!bekannt.has(r[5] + '|' + r[0].toLowerCase())) bstData.push(r);
+          });
           bstLoading = false;
           bstSearch();
         })
