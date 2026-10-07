@@ -1143,6 +1143,17 @@
           <button class="btn-add" onclick="appTriggerImport()">📥 Daten importieren</button>
         </div>
         <input type="file" id="app-import-file" accept=".json,application/json" style="display: none;" onchange="appImportFile(event)">
+
+        <div class="fb-log-header" style="margin-top: 26px;"><span>Automatische Sicherung</span></div>
+        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
+          Deine Fahrten und Strecken werden in deinem eigenen Google Drive gesichert.
+        </div>
+        <div id="gdrive-status" class="fb-shift-entry-detail" style="margin-bottom: 10px; display: none;"></div>
+        <div class="fb-footer-actions">
+          <button id="gdrive-btn-toggle" class="btn-add" onclick="gdriveToggle()">☁️ Sicherung in Google Drive einschalten</button>
+          <button id="gdrive-btn-now" class="btn-add" style="display: none;" onclick="gdriveBackup(true)">🔄 Jetzt sichern</button>
+          <button id="gdrive-btn-restore" class="btn-add" style="display: none;" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
+        </div>
         <div class="fb-footer-actions" style="margin-top: 20px;">
           <button class="btn-add" onclick="appCloseSettings()">Schließen</button>
         </div>
@@ -1500,6 +1511,7 @@
     function appOpenSettings() {
       document.querySelector('.home-grid').style.display = 'none';
       document.getElementById('settings-panel').style.display = '';
+      gdriveRenderStatus();
     }
 
     function appCloseSettings() {
@@ -1507,17 +1519,35 @@
       document.getElementById('settings-panel').style.display = 'none';
     }
 
-    function appExportData() {
+    // Sammelt alle App-Daten (ohne die geräte-spezifischen Google-Drive-Einstellungen).
+    function appCollectPayload() {
       const data = {};
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
+        if (key.startsWith('tfGdrive')) continue;
         data[key] = localStorage.getItem(key);
       }
-      const payload = {
+      return {
         app: 'tf-assistent',
         exportedAt: new Date().toISOString(),
         data
       };
+    }
+
+    // Leert den lokalen Speicher, behält aber die Google-Drive-Einstellungen
+    // dieses Geräts (Sicherung bleibt nach einem Import eingeschaltet).
+    function appClearKeepingDevice() {
+      const keep = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('tfGdrive')) keep[key] = localStorage.getItem(key);
+      }
+      localStorage.clear();
+      Object.keys(keep).forEach(k => localStorage.setItem(k, keep[k]));
+    }
+
+    function appExportData() {
+      const payload = appCollectPayload();
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1558,7 +1588,7 @@
           event.target.value = '';
           return;
         }
-        localStorage.clear();
+        appClearKeepingDevice();
         Object.keys(parsed.data).forEach(key => {
           localStorage.setItem(key, parsed.data[key]);
         });
@@ -1570,6 +1600,201 @@
       };
       reader.readAsText(file);
     }
+
+
+    // ===== Automatische Sicherung in Google Drive =====
+    // Reine Browser-Lösung ohne eigenen Server: Anmeldung über Google Identity
+    // Services, Zugriff nur auf Dateien, die diese App selbst angelegt hat
+    // (Scope drive.file). Es gibt genau EINE Datei "tf-assistent-backup.json" im
+    // Drive des Nutzers, die bei jeder Sicherung überschrieben wird.
+    // WICHTIG: Hier die eigene OAuth-Client-ID aus der Google Cloud Console eintragen.
+    const GDRIVE_CLIENT_ID = '131765507907-pft4u7tl40i1so7d5e6ph7h6eo7t5k4n.apps.googleusercontent.com';
+    const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+    const GDRIVE_FILENAME = 'tf-assistent-backup.json';
+    let gdriveToken = null;       // { value, exp }
+    let gdriveTokenClient = null;
+    let gdriveBusy = false;
+    let gdriveNote = '';          // kurzer Statushinweis (z. B. Fehler)
+
+    function gdriveConfigured() {
+      return GDRIVE_CLIENT_ID.indexOf('HIER-GOOGLE') !== 0;
+    }
+    function gdriveEnabled() {
+      try { return localStorage.getItem('tfGdriveEnabled') === '1'; } catch (e) { return false; }
+    }
+
+    function gdriveLoadScript() {
+      return new Promise((resolve, reject) => {
+        if (window.google && google.accounts && google.accounts.oauth2) return resolve();
+        const el = document.createElement('script');
+        el.src = 'https://accounts.google.com/gsi/client';
+        el.async = true;
+        el.onload = () => resolve();
+        el.onerror = () => reject(new Error('offline'));
+        document.head.appendChild(el);
+      });
+    }
+
+    // Liefert ein gültiges Zugriffstoken. interactive=false: nur still (ohne
+    // Fenster) versuchen — klappt nicht immer, dann wird später beim nächsten
+    // Tippen auf einen Button erneut versucht.
+    function gdriveGetToken(interactive) {
+      if (gdriveToken && gdriveToken.exp > Date.now() + 60000) return Promise.resolve(gdriveToken.value);
+      return gdriveLoadScript().then(() => new Promise((resolve, reject) => {
+        gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GDRIVE_CLIENT_ID,
+          scope: GDRIVE_SCOPE,
+          callback: (resp) => {
+            if (resp && resp.access_token) {
+              gdriveToken = { value: resp.access_token, exp: Date.now() + (Number(resp.expires_in) || 3600) * 1000 };
+              resolve(gdriveToken.value);
+            } else {
+              reject(new Error((resp && resp.error) || 'auth'));
+            }
+          },
+          error_callback: (err) => reject(new Error((err && err.type) || 'auth'))
+        });
+        gdriveTokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
+      }));
+    }
+
+    function gdriveApi(url, token, opts) {
+      opts = opts || {};
+      opts.headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
+      return fetch(url, opts).then(res => {
+        if (res.status === 401) gdriveToken = null;
+        return res;
+      });
+    }
+
+    // Findet die Sicherungsdatei (zuerst über die gemerkte ID, sonst per Namenssuche).
+    async function gdriveFindFile(token) {
+      const savedId = localStorage.getItem('tfGdriveFileId');
+      if (savedId) {
+        const r = await gdriveApi('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(savedId) + '?fields=id,trashed', token);
+        if (r.ok) {
+          const j = await r.json();
+          if (!j.trashed) return savedId;
+        }
+      }
+      const q = encodeURIComponent(`name='${GDRIVE_FILENAME}' and trashed=false`);
+      const r2 = await gdriveApi('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)&orderBy=modifiedTime desc', token);
+      if (!r2.ok) throw new Error('find ' + r2.status);
+      const list = (await r2.json()).files || [];
+      if (list.length > 0) {
+        localStorage.setItem('tfGdriveFileId', list[0].id);
+        return list[0].id;
+      }
+      return null;
+    }
+
+    async function gdriveBackup(interactive) {
+      if (!gdriveEnabled() || gdriveBusy) return;
+      gdriveBusy = true;
+      gdriveNote = interactive ? 'Sichere …' : '';
+      gdriveRenderStatus();
+      try {
+        const token = await gdriveGetToken(!!interactive);
+        const body = JSON.stringify(appCollectPayload());
+        let id = await gdriveFindFile(token);
+        let res;
+        if (id) {
+          res = await gdriveApi('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(id) + '?uploadType=media', token, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body
+          });
+        } else {
+          const boundary = 'tfbackup' + Date.now();
+          const multipart =
+            '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' +
+            JSON.stringify({ name: GDRIVE_FILENAME, mimeType: 'application/json' }) + '\r\n' +
+            '--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n' +
+            '--' + boundary + '--';
+          res = await gdriveApi('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', token, {
+            method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipart
+          });
+          if (res.ok) {
+            const j = await res.json();
+            if (j.id) localStorage.setItem('tfGdriveFileId', j.id);
+          }
+        }
+        if (!res.ok) throw new Error('upload ' + res.status);
+        localStorage.setItem('tfGdriveLast', new Date().toISOString());
+        gdriveNote = '';
+      } catch (e) {
+        gdriveNote = interactive
+          ? 'Sicherung fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
+          : 'Automatische Sicherung nach der Fahrt nicht möglich — tippe auf „Jetzt sichern".';
+      } finally {
+        gdriveBusy = false;
+        gdriveRenderStatus();
+      }
+    }
+
+    async function gdriveRestore() {
+      if (!gdriveEnabled()) return;
+      try {
+        const token = await gdriveGetToken(true);
+        const id = await gdriveFindFile(token);
+        if (!id) { alert('In deinem Google Drive wurde noch keine Sicherung gefunden.'); return; }
+        const res = await gdriveApi('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?alt=media', token);
+        if (!res.ok) throw new Error('download ' + res.status);
+        const parsed = await res.json();
+        if (!parsed || typeof parsed.data !== 'object') { alert('Die Sicherung in Google Drive ist nicht lesbar.'); return; }
+        const anzahl = Object.keys(parsed.data).length;
+        const datumText = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('de-DE') : 'unbekannt';
+        if (!confirm(`Wirklich ALLE aktuellen Daten auf diesem Gerät durch die Sicherung vom ${datumText} ersetzen (${anzahl} gespeicherte Eintr${anzahl === 1 ? 'ag' : 'äge'})? Das kann nicht rückgängig gemacht werden.`)) return;
+        appClearKeepingDevice();
+        Object.keys(parsed.data).forEach(key => localStorage.setItem(key, parsed.data[key]));
+        alert('Wiederherstellung abgeschlossen. Die App wird jetzt neu geladen.');
+        location.reload();
+      } catch (e) {
+        alert('Wiederherstellung nicht möglich. Bitte Verbindung prüfen und erneut versuchen.');
+      }
+    }
+
+    async function gdriveToggle() {
+      if (gdriveEnabled()) {
+        if (!confirm('Automatische Sicherung ausschalten? Die bereits gesicherte Datei bleibt in deinem Google Drive.')) return;
+        localStorage.removeItem('tfGdriveEnabled');
+        gdriveNote = '';
+        gdriveRenderStatus();
+        return;
+      }
+      if (!gdriveConfigured()) {
+        alert('Der Google-Zugang ist in dieser Version noch nicht eingerichtet.');
+        return;
+      }
+      try {
+        await gdriveGetToken(true);
+      } catch (e) {
+        gdriveNote = 'Anmeldung bei Google nicht abgeschlossen.';
+        gdriveRenderStatus();
+        return;
+      }
+      localStorage.setItem('tfGdriveEnabled', '1');
+      await gdriveBackup(true);
+    }
+
+    function gdriveRenderStatus() {
+      const on = gdriveEnabled();
+      const statusEl = document.getElementById('gdrive-status');
+      if (!statusEl) return;
+      document.getElementById('gdrive-btn-toggle').textContent =
+        on ? '☁️ Sicherung ausschalten' : '☁️ Sicherung in Google Drive einschalten';
+      document.getElementById('gdrive-btn-now').style.display = on ? '' : 'none';
+      document.getElementById('gdrive-btn-restore').style.display = on ? '' : 'none';
+      const last = localStorage.getItem('tfGdriveLast');
+      let text = '';
+      if (on) {
+        text = last ? 'Eingeschaltet · Letzte Sicherung: ' + new Date(last).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : 'Eingeschaltet · Noch keine Sicherung';
+      }
+      if (gdriveNote) text = text ? text + '\n' + gdriveNote : gdriveNote;
+      statusEl.style.whiteSpace = 'pre-line';
+      statusEl.textContent = text;
+      statusEl.style.display = text ? '' : 'none';
+    }
+
 
     window.addEventListener('scroll', () => {
       document.getElementById('scroll-top-btn').classList.toggle('visible', window.scrollY > 400);
@@ -2780,6 +3005,9 @@
         fbLog.push({ type: 'ende', time: last.time, ort: last.ort });
         fbSave();
         fbRender();
+        // Nach einer beendeten Fahrt automatisch sichern (Strecken sind nach fbRender() aktuell).
+        // Kurze Verzögerung, aber noch innerhalb der Tipp-Geste, damit eine nötige Google-Anmeldung nicht blockiert wird.
+        if (gdriveEnabled()) setTimeout(() => gdriveBackup(false), 300);
         return;
       }
       // 'weiterfahrt': normalerweise fährst du vom selben Ort weiter, an dem du
