@@ -747,8 +747,8 @@
       padding: 18px 2px;
       border: none;
       border-radius: 12px;
-      white-space: nowrap;
-      font-size: 0.9rem;
+      font-size: 1.9rem;
+      line-height: 1;
       font-weight: 700;
       color: #ffffff;
       background-color: #0d9488;
@@ -1318,7 +1318,7 @@
         <div id="fb-btn-row-single">
           <div class="fb-btn-row-inner">
             <button id="fb-main-btn" class="fb-main-btn fb-btn-start" onclick="fbPressButton('abfahrt')">Starten</button>
-            <button id="fb-ping-btn" class="fb-ping-btn" style="display: none;" onclick="fbPressButton('durch')" title="Durchfahrt ohne Halt markieren">📍 Durch</button>
+            <button id="fb-ping-btn" class="fb-ping-btn" style="display: none;" onclick="fbPressButton('durch')" title="Durchfahrt ohne Halt markieren" aria-label="Durchfahrt markieren">📍</button>
           </div>
         </div>
         <div id="fb-btn-row-double" style="display: none;">
