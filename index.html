@@ -3368,6 +3368,19 @@
             || kurz.toLowerCase().includes(q);
         });
 
+        // Reihenfolge: 1. Kürzel exakt, 2. Kürzel beginnt mit, 3. Name beginnt mit, 4. Rest.
+        // Array.sort ist stabil, innerhalb einer Stufe bleibt die bisherige Reihenfolge.
+        if (q) {
+          const rank = row => {
+            const code = row[0].toLowerCase();
+            if (code === q) return 0;
+            if (code.startsWith(q)) return 1;
+            if (row[1].toLowerCase().startsWith(q) || row[2].toLowerCase().startsWith(q)) return 2;
+            return 3;
+          };
+          matches.sort((a, b) => rank(a) - rank(b));
+        }
+
         const LIMIT = 100;
         const shown = q ? matches.slice(0, LIMIT) : [];
 
