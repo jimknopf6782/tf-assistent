@@ -2673,9 +2673,19 @@
         // Einfüge-Reihenfolge — so stehen zusammengehörige Strecken (gleicher
         // Startort, egal welcher genaue Bahnhofsteil) automatisch beieinander,
         // ganz ohne manuelle Kategorie.
+        // Hin- und Rückrichtung stehen als Pärchen direkt untereinander
+        // (z. B. Bludenz→Wohlfurt und Wohlfurt→Bludenz). Gruppiert wird nach
+        // dem alphabetisch kleineren Ort des Paars, dann nach dem größeren;
+        // innerhalb des Paars kommt die Richtung zuerst, deren Von-Ort
+        // alphabetisch vorne liegt.
         .sort((a, b) => {
+          const cmp = (x, y) => x.localeCompare(y, 'de');
           const ra = fbRoutes[a], rb = fbRoutes[b];
-          return ra.vonName.localeCompare(rb.vonName, 'de') || ra.bisName.localeCompare(rb.bisName, 'de');
+          const loA = cmp(ra.vonName, ra.bisName) <= 0 ? ra.vonName : ra.bisName;
+          const hiA = loA === ra.vonName ? ra.bisName : ra.vonName;
+          const loB = cmp(rb.vonName, rb.bisName) <= 0 ? rb.vonName : rb.bisName;
+          const hiB = loB === rb.vonName ? rb.bisName : rb.vonName;
+          return cmp(loA, loB) || cmp(hiA, hiB) || cmp(ra.vonName, rb.vonName) || cmp(ra.bisName, rb.bisName);
         });
 
       if (indices.length === 0) {
