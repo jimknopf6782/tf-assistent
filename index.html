@@ -2706,7 +2706,7 @@
           summaryHtml = `
             <div class="fb-route-search-summary">
               Ø Fahrzeit ${fbFormatDuration(avgMs)} · ${indices.length} Strecke${indices.length === 1 ? '' : 'n'} gefunden<br>
-              Fahrzeit Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${alleFahrten.length} Fahrt${alleFahrten.length === 1 ? '' : 'en'} gesamt)
+              Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${alleFahrten.length} Fahrt${alleFahrten.length === 1 ? '' : 'en'} gesamt)
             </div>
           `;
         } else {
@@ -2730,7 +2730,7 @@
           } else {
             const minMs = Math.min(...fahrten.map(t => t.fahrzeitMs));
             const maxMs = Math.max(...fahrten.map(t => t.fahrzeitMs));
-            statsHtml = `<div class="fb-shift-entry-detail">Fahrzeit Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
+            statsHtml = `<div class="fb-shift-entry-detail">Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})</div>`;
           }
           detail = `
             <div class="fb-route-detail-expanded">
