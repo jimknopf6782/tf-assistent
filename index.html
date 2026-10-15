@@ -1350,6 +1350,10 @@
               <button class="btn-add" style="flex: 0 0 auto; width: auto; margin: 0; padding: 10px 14px;" onclick="fbQuerySwap()" title="Richtung tauschen" aria-label="Richtung tauschen">⇄</button>
               <button id="fb-query-bis" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('bis')">Bis wählen</button>
             </div>
+            <div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px;">
+              <button id="fb-query-via" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('via')">Über (optional)</button>
+              <button id="fb-query-via-clear" class="btn-add" style="flex: 0 0 auto; width: auto; margin: 0; padding: 10px 14px; display: none;" onclick="fbQueryClearVia()" title="Über entfernen" aria-label="Über entfernen">✕</button>
+            </div>
             <div id="fb-query-result"></div>
           </div>
           <div class="fb-footer-actions" style="margin-top: 0; margin-bottom: 16px;">
@@ -2923,7 +2927,8 @@
     // ===== Strecken-Abfrage: Von/Bis wählen, Ergebnis sofort aus dem Archiv =====
     let fbQueryVon = null;   // {code, name}
     let fbQueryBis = null;
-    let fbQueryStage = null; // 'von' | 'bis'
+    let fbQueryVia = null;   // optionaler Ort dazwischen
+    let fbQueryStage = null; // 'von' | 'bis' | 'via'
 
     // Alle Orte aus den gesicherten Fahrten, häufigste zuerst.
     function fbArchiveOrte() {
@@ -2998,17 +3003,28 @@
     }
 
     // Sucht eine Verbindung von -> bis aus bis zu 3 Teilstücken (Fahrtrichtung
-    // bleibt erhalten). Bevorzugt wenige Teilstücke, dann viele Fahrten dahinter.
-    function fbComposeBest(von, bis) {
-      const { stats, names } = fbLegStats();
+    // bleibt erhalten) und nimmt die mit der kürzesten Gesamtzeit.
+    function fbComposeBest(von, bis, data) {
+      const { stats, names } = data || fbLegStats();
+      // Gibt es eine echte Fahrt von -> bis, gilt sie als einziges Teilstück.
+      const direkt = stats.get(von + '\u0001' + bis);
+      if (direkt) return { legs: [direkt], names };
       const adj = new Map();
       stats.forEach(st => {
         if (!adj.has(st.von)) adj.set(st.von, []);
         adj.get(st.von).push(st);
       });
       let best = null;
+      // Jede zusammengesetzte Verbindung ist ein tatsächlich gefahrener Weg und
+      // damit mindestens so lang wie die echte Strecke. Ein Umweg (z. B. über
+      // Wohlfurt nach Innsbruck, obwohl man dort schon vorbeifährt) ist länger.
+      // Deshalb gewinnt die Verbindung mit der kürzesten Gesamtzeit. Bei
+      // (praktisch) gleicher Zeit: weniger Teilstücke, dann mehr Fahrten.
+      const avgSum = legs => legs.reduce((x, l) => x + l.sum / l.n, 0);
       const better = (a, b) => { // ist a besser als b?
         if (!b) return true;
+        const ta = avgSum(a), tb = avgSum(b);
+        if (Math.abs(ta - tb) > 60000) return ta < tb;
         if (a.length !== b.length) return a.length < b.length;
         const minA = Math.min(...a.map(l => l.n)), minB = Math.min(...b.map(l => l.n));
         if (minA !== minB) return minA > minB;
@@ -3036,6 +3052,10 @@
       if (!vonBtn || !bisBtn || !resEl) return;
       vonBtn.textContent = fbQueryVon ? fbQueryVon.name : 'Von wählen';
       bisBtn.textContent = fbQueryBis ? fbQueryBis.name : 'Bis wählen';
+      const viaBtn = document.getElementById('fb-query-via');
+      const viaClear = document.getElementById('fb-query-via-clear');
+      if (viaBtn) viaBtn.textContent = fbQueryVia ? 'Über ' + fbQueryVia.name : 'Über (optional)';
+      if (viaClear) viaClear.style.display = fbQueryVia ? 'block' : 'none';
 
       if (fbArchiveRead().length === 0) {
         resEl.innerHTML = '<div class="fb-shift-entry-detail">Noch keine abgeschlossene Fahrt vorhanden. Sobald du eine Fahrt beendet hast, kannst du hier jede Teilstrecke daraus abfragen.</div>';
@@ -3049,6 +3069,35 @@
         resEl.innerHTML = '<div class="fb-shift-entry-detail">Von und Bis sind derselbe Ort.</div>';
         return;
       }
+      // Mit "Über": genau durch diesen Ort rechnen (Von -> Über + Über -> Bis).
+      if (fbQueryVia) {
+        if (fbQueryVia.code === fbQueryVon.code || fbQueryVia.code === fbQueryBis.code) {
+          resEl.innerHTML = '<div class="fb-shift-entry-detail">Der Ort bei „Über" muss zwischen Von und Bis liegen, nicht derselbe wie Von oder Bis.</div>';
+          return;
+        }
+        const data = fbLegStats();
+        const links = fbComposeBest(fbQueryVon.code, fbQueryVia.code, data);
+        const rechts = fbComposeBest(fbQueryVia.code, fbQueryBis.code, data);
+        if (!links || !rechts) {
+          resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Verbindung über ${bstEscapeHtml(fbQueryVia.name)} gefunden: ${!links ? bstEscapeHtml(fbQueryVon.name) + ' → ' + bstEscapeHtml(fbQueryVia.name) : bstEscapeHtml(fbQueryVia.name) + ' → ' + bstEscapeHtml(fbQueryBis.name)} kommt in deinen Fahrten nicht vor.</div>`;
+          return;
+        }
+        const legs = links.legs.concat(rechts.legs);
+        const avg = legs.reduce((x, l) => x + l.sum / l.n, 0);
+        const mn = legs.reduce((x, l) => x + l.min, 0);
+        const mx = legs.reduce((x, l) => x + l.max, 0);
+        const nm = c => bstEscapeHtml(data.names.get(c) || c);
+        resEl.innerHTML = `
+          <div class="fb-route-search-summary">
+            Ø Fahrzeit ${fbFormatDuration(avg)}<br>
+            Min ${fbFormatDuration(mn)} · Max ${fbFormatDuration(mx)}
+          </div>
+          <div class="fb-shift-entry-detail" style="margin-top: 8px;">Über ${bstEscapeHtml(fbQueryVia.name)}, aus Teilstücken zusammengefügt:</div>
+          ${legs.map(l => `<div class="fb-shift-entry-detail">${nm(l.von)} → ${nm(l.bis)}: Ø ${fbFormatDuration(l.sum / l.n)} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div>`).join('')}
+        `;
+        return;
+      }
+
       const fahrten = fbFindFahrten(fbQueryVon.code, fbQueryBis.code);
       if (fahrten.length === 0) {
         // Keine direkte Fahrt: aus Teilstücken anderer Fahrten zusammensetzen.
@@ -3090,7 +3139,7 @@
       fbQueryStage = stage;
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-query-picker').style.display = 'block';
-      document.getElementById('fb-query-picker-title').textContent = stage === 'von' ? 'Von wählen' : 'Bis wählen';
+      document.getElementById('fb-query-picker-title').textContent = stage === 'von' ? 'Von wählen' : (stage === 'via' ? 'Über welchen Ort?' : 'Bis wählen');
       document.getElementById('fb-query-picker-search').value = '';
       fbQueryPickerRender();
       window.scrollTo(0, 0);
@@ -3141,8 +3190,14 @@
       const o = fbQueryPickerRows[i];
       if (!o) return;
       if (fbQueryStage === 'von') fbQueryVon = { code: o.code, name: o.name };
+      else if (fbQueryStage === 'via') fbQueryVia = { code: o.code, name: o.name };
       else fbQueryBis = { code: o.code, name: o.name };
       fbQueryPickerClose();
+      fbQueryRender();
+    }
+
+    function fbQueryClearVia() {
+      fbQueryVia = null;
       fbQueryRender();
     }
 
