@@ -2788,6 +2788,26 @@
       fbRoutePickerVon = null;
     }
 
+    // Gemeinsame Suche für alle Betriebsstellen-Picker (Abfahrt/Stopp/Durchfahrt
+    // und Strecke anlegen). Reihenfolge: 1. Kürzel exakt, 2. Kürzel beginnt mit,
+    // 3. Name beginnt mit, 4. alles andere, was den Suchbegriff enthält.
+    // Sortiert VOR dem Abschneiden der Trefferliste, sonst fehlt der exakte
+    // Treffer, wenn es viele Teiltreffer gibt. Array.sort ist stabil.
+    function bstSearchRanked(q) {
+      const scored = [];
+      for (const row of bstData) {
+        const code = row[0].toLowerCase(), name = row[1].toLowerCase(), kurz = row[2].toLowerCase();
+        if (!(code.includes(q) || name.includes(q) || kurz.includes(q))) continue;
+        let rank = 3;
+        if (code === q) rank = 0;
+        else if (code.startsWith(q)) rank = 1;
+        else if (name.startsWith(q) || kurz.startsWith(q)) rank = 2;
+        scored.push({ row, rank });
+      }
+      scored.sort((a, b) => a.rank - b.rank);
+      return scored.map(x => x.row);
+    }
+
     function fbRoutePickerSearch() {
       const q = document.getElementById('fb-route-picker-search').value.trim().toLowerCase();
       const listEl = document.getElementById('fb-route-picker-list');
@@ -2796,10 +2816,7 @@
         fbRoutePickerRows = [];
         return;
       }
-      const matches = bstData.filter(row => {
-        const [code, name, kurz] = row;
-        return code.toLowerCase().includes(q) || name.toLowerCase().includes(q) || kurz.toLowerCase().includes(q);
-      }).slice(0, 30);
+      const matches = bstSearchRanked(q).slice(0, 30);
       fbRoutePickerRows = matches;
       listEl.innerHTML = matches.map((row, i) => {
         const [code, name, kurz, kat, status, land] = row;
@@ -3169,10 +3186,7 @@
         fbRenderPickerList([], [], raw);
         return;
       }
-      const matches = bstData.filter(row => {
-        const [code, name, kurz] = row;
-        return code.toLowerCase().includes(q) || name.toLowerCase().includes(q) || kurz.toLowerCase().includes(q);
-      }).slice(0, 30);
+      const matches = bstSearchRanked(q).slice(0, 30);
       fbRenderPickerList(matches, [], raw);
     }
 
