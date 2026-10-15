@@ -2848,7 +2848,7 @@
             <span>${s.art}</span>
             <span>${fbFormatDuration(s.dauerMs)}</span>
           </summary>
-          <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' 📍 Durchfahrt' : ''}</div>
+          <div class="fb-log-entry-detail">${fbFormatTime(s.zeitVon)} ${s.von} → ${fbFormatTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' Durchfahrt' : ''}</div>
           <div class="fb-log-entry-detail fb-log-entry-exact">Von: ${fbFormatDateTime(s.zeitVon)} · Bis: ${fbFormatDateTime(s.zeitBis)}</div>
         </details>
       `).join('');
@@ -2865,7 +2865,7 @@
             <span>${s.art}</span>
             <span>${fbFormatDuration(s.dauerMs)}</span>
           </div>
-          <div class="fb-log-entry-detail">${fbFormatDateTime(s.zeitVon)} ${s.von} → ${fbFormatDateTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' 📍 Durchfahrt' : ''}</div>
+          <div class="fb-log-entry-detail">${fbFormatDateTime(s.zeitVon)} ${s.von} → ${fbFormatDateTime(s.zeitBis)} ${s.bis}${s.bisDurch ? ' Durchfahrt' : ''}</div>
         </div>
       `).join('');
     }
@@ -2888,15 +2888,10 @@
     // letzten Schicht. Ändert nur die Uhrzeit (Stunde/Minute), das Datum des
     // jeweiligen Eintrags bleibt unangetastet — für den Fall "Pause vergessen
     // zu drücken, Fahrzeit steht jetzt zu lang drin".
-    let fbEditShiftIndex = null; // Index der gerade bearbeiteten Schicht (in fbBuildShifts())
-    function fbOpenEdit(shiftIndex) {
+    function fbOpenEdit() {
       const shifts = fbBuildShifts();
-      const idx = (typeof shiftIndex === 'number') ? shiftIndex : shifts.length - 1;
-      const shift = shifts[idx];
+      const shift = shifts[shifts.length - 1];
       if (!shift) return;
-      fbEditShiftIndex = idx;
-      fbClosePicker();
-      window.scrollTo(0, 0);
 
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-edit-panel').style.display = 'block';
@@ -2919,57 +2914,19 @@
 
     function fbSaveEdit() {
       const shifts = fbBuildShifts();
-      const shift = shifts[fbEditShiftIndex !== null ? fbEditShiftIndex : shifts.length - 1];
+      const shift = shifts[shifts.length - 1];
       if (!shift) return;
 
-      // Neue Zeiten berechnen (nur Stunde/Minute ändern, Datum bleibt) und prüfen,
-      // dass die Reihenfolge stimmt — sonst entstehen negative Dauern.
-      const neueZeiten = shift.entries.map((entry, i) => {
+      shift.entries.forEach((entry, i) => {
         const val = document.getElementById(`fb-edit-time-${i}`).value; // "HH:MM"
-        if (!val) return entry.time;
-        // "Ende" hat dieselbe Zeit wie der letzte Stopp davor (Ankunft). Wurde das
-        // Ende-Feld nicht selbst angefasst, folgt es dem korrigierten Stopp.
-        const prev = i > 0 ? shift.entries[i - 1] : null;
-        if (entry.type === 'ende' && prev && prev.time === entry.time && val === fbTimeInputValue(entry.time)) {
-          return null; // unten auf neueZeiten[i - 1] setzen
-        }
+        if (!val) return;
         const [h, m] = val.split(':').map(Number);
         const d = new Date(entry.time);
         d.setHours(h, m, 0, 0);
-        return d.toISOString();
+        entry.time = d.toISOString(); // entry ist dieselbe Objektreferenz wie in fbLog
       });
-      for (let i = 0; i < neueZeiten.length; i++) {
-        if (neueZeiten[i] === null) neueZeiten[i] = neueZeiten[i - 1];
-      }
-      for (let i = 1; i < neueZeiten.length; i++) {
-        if (new Date(neueZeiten[i]) < new Date(neueZeiten[i - 1])) {
-          alert('Die Uhrzeiten müssen in zeitlicher Reihenfolge stehen. Bitte prüfe die Einträge ab Zeile ' + (i + 1) + '.');
-          return;
-        }
-      }
-
-      // Strecken-Statistik: Fahrten dieser Schicht (erkennbar an ihrer alten
-      // Abfahrtszeit) aus den Strecken entfernen; fbSyncRoutes() trägt sie mit
-      // den neuen Zeiten wieder ein. So entstehen keine Doppelten und die
-      // Fahrzeiten stimmen nach der Korrektur.
-      const alteZeiten = new Set(shift.entries.map(e => e.time));
-      let routesChanged = false;
-      fbRoutes.forEach(route => {
-        const vorher = route.fahrten.length;
-        route.fahrten = route.fahrten.filter(f => !alteZeiten.has(f.datum));
-        if (route.fahrten.length !== vorher) routesChanged = true;
-      });
-
-      shift.entries.forEach((entry, i) => { entry.time = neueZeiten[i]; }); // entry ist dieselbe Objektreferenz wie in fbLog
-      // Eine "Fertig"-Markierung hängt an der Start-Zeit der Schicht — mitführen.
-      if (fbCollapsedShiftStart && alteZeiten.has(fbCollapsedShiftStart) && shift.entries[0].time !== fbCollapsedShiftStart) {
-        fbCollapsedShiftStart = shift.entries[0].time;
-        try { localStorage.setItem(FB_COLLAPSED_KEY, fbCollapsedShiftStart); } catch (e) {}
-      }
 
       fbSave();
-      if (routesChanged) fbSaveRoutes();
-      fbEditShiftIndex = null;
       fbCloseEdit();
       fbRender();
     }
@@ -3067,10 +3024,7 @@
             <div class="fb-shift-entry">
               <div class="fb-shift-entry-top">
                 <span>${vonTxt} → ${bisTxt}</span>
-                <span style="display: flex; gap: 6px; align-items: center;">
-                  <button class="fb-shift-export-btn" onclick="fbOpenEdit(${realIndex})" title="Uhrzeiten korrigieren" aria-label="Uhrzeiten korrigieren">✏️</button>
-                  <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})" title="Exportieren" aria-label="Exportieren">📤</button>
-                </span>
+                <button class="fb-shift-export-btn" onclick="fbExportShift(${realIndex})" title="Exportieren" aria-label="Exportieren">📤</button>
               </div>
               <div class="fb-shift-entry-detail">${routeTxt}</div>
               <div class="fb-shift-entry-detail">Fahrzeit ${fbFormatDuration(shift.fahrzeitMs)} · Standzeit ${fbFormatDuration(shift.stehzeitMs)}</div>
