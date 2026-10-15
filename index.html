@@ -2961,6 +2961,74 @@
       return out;
     }
 
+    // ----- Strecken aus Teilstücken zusammensetzen -----
+    // Für jedes Von→Bis-Paar, das in IRGENDEINER Fahrt vorkommt (Von = Start/Durchfahrt,
+    // Bis = Stopp/Ende/Durchfahrt weiter hinten), die Fahrzeit-Statistik sammeln.
+    // Pro Fahrt zählt ein Paar einmal. Standzeiten sind nicht dabei.
+    function fbLegStats() {
+      const stats = new Map();
+      const names = new Map();
+      fbArchiveShifts().forEach(shift => {
+        const e = shift.entries;
+        const t = e.map(x => new Date(x.time).getTime());
+        const D = [0]; // D[k] = reine Fahrzeit vom Fahrtbeginn bis Eintrag k
+        for (let k = 0; k < e.length - 1; k++) D.push(D[k] + (e[k].type === 'stopp' ? 0 : t[k + 1] - t[k]));
+        e.forEach(x => names.set(x.ort.code, x.ort.name));
+        const seen = new Set();
+        for (let i = 0; i < e.length; i++) {
+          if (e[i].type !== 'start' && e[i].type !== 'durch') continue;
+          const vonC = e[i].ort.code;
+          const done = new Set();
+          for (let j = i + 1; j < e.length; j++) {
+            if (e[j].type !== 'stopp' && e[j].type !== 'ende' && e[j].type !== 'durch') continue;
+            const bisC = e[j].ort.code;
+            if (bisC === vonC || done.has(bisC)) continue;
+            done.add(bisC);
+            const key = vonC + '\u0001' + bisC;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const ms = D[j] - D[i];
+            let st = stats.get(key);
+            if (!st) { st = { von: vonC, bis: bisC, n: 0, sum: 0, min: Infinity, max: 0 }; stats.set(key, st); }
+            st.n++; st.sum += ms; st.min = Math.min(st.min, ms); st.max = Math.max(st.max, ms);
+          }
+        }
+      });
+      return { stats, names };
+    }
+
+    // Sucht eine Verbindung von -> bis aus bis zu 3 Teilstücken (Fahrtrichtung
+    // bleibt erhalten). Bevorzugt wenige Teilstücke, dann viele Fahrten dahinter.
+    function fbComposeBest(von, bis) {
+      const { stats, names } = fbLegStats();
+      const adj = new Map();
+      stats.forEach(st => {
+        if (!adj.has(st.von)) adj.set(st.von, []);
+        adj.get(st.von).push(st);
+      });
+      let best = null;
+      const better = (a, b) => { // ist a besser als b?
+        if (!b) return true;
+        if (a.length !== b.length) return a.length < b.length;
+        const minA = Math.min(...a.map(l => l.n)), minB = Math.min(...b.map(l => l.n));
+        if (minA !== minB) return minA > minB;
+        return a.reduce((x, l) => x + l.n, 0) > b.reduce((x, l) => x + l.n, 0);
+      };
+      const dfs = (cur, legs, visited) => {
+        if (legs.length >= 3) return;
+        (adj.get(cur) || []).forEach(st => {
+          if (visited.has(st.bis)) return;
+          const next = legs.concat([st]);
+          if (st.bis === bis) { if (better(next, best)) best = next; return; }
+          visited.add(st.bis);
+          dfs(st.bis, next, visited);
+          visited.delete(st.bis);
+        });
+      };
+      dfs(von, [], new Set([von]));
+      return best ? { legs: best, names } : null;
+    }
+
     function fbQueryRender() {
       const vonBtn = document.getElementById('fb-query-von');
       const bisBtn = document.getElementById('fb-query-bis');
@@ -2983,7 +3051,24 @@
       }
       const fahrten = fbFindFahrten(fbQueryVon.code, fbQueryBis.code);
       if (fahrten.length === 0) {
-        resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Fahrt von ${bstEscapeHtml(fbQueryVon.name)} nach ${bstEscapeHtml(fbQueryBis.name)} in deinen Fahrten gefunden.</div>`;
+        // Keine direkte Fahrt: aus Teilstücken anderer Fahrten zusammensetzen.
+        const comp = fbComposeBest(fbQueryVon.code, fbQueryBis.code);
+        if (!comp) {
+          resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Fahrt von ${bstEscapeHtml(fbQueryVon.name)} nach ${bstEscapeHtml(fbQueryBis.name)} gefunden, auch nicht aus Teilstücken deiner Fahrten.</div>`;
+          return;
+        }
+        const avg = comp.legs.reduce((x, l) => x + l.sum / l.n, 0);
+        const mn = comp.legs.reduce((x, l) => x + l.min, 0);
+        const mx = comp.legs.reduce((x, l) => x + l.max, 0);
+        const nm = c => bstEscapeHtml(comp.names.get(c) || c);
+        resEl.innerHTML = `
+          <div class="fb-route-search-summary">
+            Ø Fahrzeit ${fbFormatDuration(avg)}<br>
+            Min ${fbFormatDuration(mn)} · Max ${fbFormatDuration(mx)}
+          </div>
+          <div class="fb-shift-entry-detail" style="margin-top: 8px;">Aus Teilstücken zusammengefügt:</div>
+          ${comp.legs.map(l => `<div class="fb-shift-entry-detail">${nm(l.von)} → ${nm(l.bis)}: Ø ${fbFormatDuration(l.sum / l.n)} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div>`).join('')}
+        `;
         return;
       }
       const avgMs = fahrten.reduce((s, f) => s + f.fahrzeitMs, 0) / fahrten.length;
