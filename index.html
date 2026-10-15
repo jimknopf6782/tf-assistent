@@ -3004,7 +3004,8 @@
 
     // Sucht eine Verbindung von -> bis aus bis zu 3 Teilstücken (Fahrtrichtung
     // bleibt erhalten) und nimmt die mit der kürzesten Gesamtzeit.
-    function fbComposeBest(von, bis, data) {
+    // "meiden" = Orte, die der Weg nicht (nochmal) berühren darf (verhindert Schleifen).
+    function fbComposeBest(von, bis, data, meiden) {
       const { stats, names } = data || fbLegStats();
       // Gibt es eine echte Fahrt von -> bis, gilt sie als einziges Teilstück.
       const direkt = stats.get(von + '\u0001' + bis);
@@ -3041,7 +3042,7 @@
           visited.delete(st.bis);
         });
       };
-      dfs(von, [], new Set([von]));
+      dfs(von, [], new Set([von].concat(meiden || [])));
       return best ? { legs: best, names } : null;
     }
 
@@ -3076,8 +3077,14 @@
           return;
         }
         const data = fbLegStats();
-        const links = fbComposeBest(fbQueryVon.code, fbQueryVia.code, data);
-        const rechts = fbComposeBest(fbQueryVia.code, fbQueryBis.code, data);
+        // Der Weg darf keinen Ort zweimal berühren: die linke Hälfte nicht über "Bis",
+        // die rechte nicht über Orte der linken Hälfte (sonst Schleifen wie
+        // Wolfurt → Kufstein → Wolfurt → ...).
+        const links = fbComposeBest(fbQueryVon.code, fbQueryVia.code, data, [fbQueryBis.code]);
+        const linksOrte = new Set([fbQueryVon.code]);
+        if (links) links.legs.forEach(l => { linksOrte.add(l.von); linksOrte.add(l.bis); });
+        linksOrte.delete(fbQueryVia.code);
+        const rechts = links ? fbComposeBest(fbQueryVia.code, fbQueryBis.code, data, [...linksOrte]) : null;
         if (!links || !rechts) {
           resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Verbindung über ${bstEscapeHtml(fbQueryVia.name)} gefunden: ${!links ? bstEscapeHtml(fbQueryVon.name) + ' → ' + bstEscapeHtml(fbQueryVia.name) : bstEscapeHtml(fbQueryVia.name) + ' → ' + bstEscapeHtml(fbQueryBis.name)} kommt in deinen Fahrten nicht vor.</div>`;
           return;
