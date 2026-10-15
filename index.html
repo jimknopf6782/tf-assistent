@@ -3015,6 +3015,9 @@
       document.getElementById('fb-main').style.display = 'block';
       document.getElementById('fb-query-picker').style.display = 'none';
       fbQueryStage = null;
+      // Die Auswahlliste war meist nach unten gescrollt — zurück zur Abfrage-Karte oben,
+      // damit man direkt "Bis" wählen kann.
+      window.scrollTo(0, 0);
     }
 
     let fbQueryPickerRows = [];
