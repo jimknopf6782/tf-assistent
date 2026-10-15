@@ -1338,11 +1338,20 @@
         <div class="fb-footer-actions">
           <button class="btn-add" onclick="fbExportAllShifts()">📤 Alle Fahrten exportieren</button>
           <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbResetLog()">🗑 Alle Fahrten löschen</button>
-          <div class="fb-shift-entry-detail" style="margin-top: 8px; text-align: center;">Die angelegten Strecken mit ihrer Statistik bleiben dabei erhalten.</div>
+          <div class="fb-shift-entry-detail" style="margin-top: 8px; text-align: center;">Die angelegten Strecken und die Strecken-Abfrage bleiben dabei erhalten.</div>
         </div>
         </div>
 
         <div id="fb-view-strecken" style="display: none;">
+          <div id="fb-query-card" style="margin-bottom: 18px;">
+            <div class="fb-log-header"><span>Strecke abfragen</span></div>
+            <div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px;">
+              <button id="fb-query-von" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('von')">Von wählen</button>
+              <button class="btn-add" style="flex: 0 0 auto; width: auto; margin: 0; padding: 10px 14px;" onclick="fbQuerySwap()" title="Richtung tauschen" aria-label="Richtung tauschen">⇄</button>
+              <button id="fb-query-bis" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('bis')">Bis wählen</button>
+            </div>
+            <div id="fb-query-result"></div>
+          </div>
           <div class="fb-footer-actions" style="margin-top: 0; margin-bottom: 16px;">
             <button class="btn-add" onclick="fbOpenRouteAdd()">+ Strecke / Teilstrecke hinzufügen</button>
           </div>
@@ -1380,6 +1389,13 @@
           <button id="gdrive-btn-now" class="btn-add" style="display: none;" onclick="gdriveBackup(true)">🔄 Jetzt sichern</button>
           <button id="gdrive-btn-restore" class="btn-add" style="display: none;" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
         </div>
+        <div class="fb-log-header" style="margin-top: 26px;"><span>Strecken-Abfrage</span></div>
+        <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
+          Die Strecken-Abfrage rechnet aus einer gesicherten Kopie deiner abgeschlossenen Fahrten. „Alle Fahrten löschen" lässt sie unberührt. Hier kannst du sie bewusst löschen.
+        </div>
+        <div class="fb-footer-actions">
+          <button class="btn-add" style="color: var(--danger); border-color: var(--danger);" onclick="fbArchiveClear()">🗑 Gesicherte Fahrten der Abfrage löschen</button>
+        </div>
         <div class="fb-footer-actions" style="margin-top: 20px;">
           <button class="btn-add" onclick="appCloseSettings()">Schließen</button>
         </div>
@@ -1409,6 +1425,16 @@
 
       <!-- Start/Ziel einer neuen beobachteten Strecke wählen (zweistufig,
            nutzt denselben Betriebsstellen-Picker wie Abfahrt/Stopp) -->
+      <!-- Von/Bis für die Strecken-Abfrage: zeigt die Orte aus den eigenen Fahrten -->
+      <div id="fb-query-picker" class="fb-picker" style="display: none;">
+        <div class="fb-picker-title" id="fb-query-picker-title">Von wählen</div>
+        <div class="form-group">
+          <input type="text" id="fb-query-picker-search" placeholder="Ort oder Kürzel suchen" oninput="fbQueryPickerRender()" autocomplete="off">
+        </div>
+        <div id="fb-query-picker-list"></div>
+        <button class="btn-add" onclick="fbQueryPickerClose()">Abbrechen</button>
+      </div>
+
       <div id="fb-route-picker" class="fb-picker" style="display: none;">
         <div class="fb-picker-title" id="fb-route-picker-title">Startort wählen</div>
         <div class="form-group">
@@ -2390,6 +2416,7 @@
     const FB_STORAGE_KEY = 'tfFahrtenbuchLog';
     const FB_ROUTES_KEY = 'tfFahrtenbuchRoutes';
     const FB_COLLAPSED_KEY = 'tfFahrtenbuchCollapsedShift';
+    const FB_ARCHIVE_KEY = 'tfFahrtenbuchArchiv'; // Schattenkopie aller abgeschlossenen Fahrten (für Strecken-Abfrage), überlebt "Alle Fahrten löschen"
     let fbLog = []; // flache Liste: {type: 'start'|'stopp'|'ende', time, ort}
     // Start-Zeit (ISO) der abgeschlossenen Schicht, die der Nutzer per "✓ Fertig"
     // vorzeitig in "Frühere Schichten" einsortiert hat, statt zu warten, bis die
@@ -2445,6 +2472,64 @@
       } catch (e) {
         console.log('Fahrtenbuch: Speichern fehlgeschlagen', e);
       }
+    }
+
+    // ===== Schattendatenbank: Kopie aller abgeschlossenen Fahrten =====
+    // Jede abgeschlossene Fahrt wird zusätzlich hier abgelegt (Schlüssel = Start-
+    // Zeit). "Alle Fahrten löschen" leert nur fbLog, NICHT diese Kopie. Strecken
+    // und die Strecken-Abfrage rechnen aus dieser Kopie, damit sie auch nach dem
+    // Löschen des Verlaufs weiter funktionieren. Gelöscht wird sie nur bewusst
+    // über das Menü ⋮ (siehe fbArchiveClear).
+    let fbArchiveCache = null;
+    function fbArchiveRead() {
+      if (fbArchiveCache) return fbArchiveCache;
+      try {
+        const raw = localStorage.getItem(FB_ARCHIVE_KEY);
+        fbArchiveCache = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        fbArchiveCache = [];
+      }
+      if (!Array.isArray(fbArchiveCache)) fbArchiveCache = [];
+      return fbArchiveCache;
+    }
+    function fbArchiveWrite() {
+      try {
+        localStorage.setItem(FB_ARCHIVE_KEY, JSON.stringify(fbArchiveCache || []));
+      } catch (e) {
+        console.log('Fahrtenbuch: Archiv speichern fehlgeschlagen', e);
+      }
+    }
+    function fbArchiveSync() {
+      const archiv = fbArchiveRead();
+      const index = new Map(archiv.map((a, i) => [a.start, i]));
+      let changed = false;
+      fbBuildShifts().forEach(shift => {
+        if (!shift.end) return; // nur abgeschlossene Fahrten
+        const key = shift.start.time;
+        const entries = shift.entries.map(e => ({ type: e.type, time: e.time, ort: { code: e.ort.code, name: e.ort.name } }));
+        if (!index.has(key)) {
+          archiv.push({ start: key, entries });
+          index.set(key, archiv.length - 1);
+          changed = true;
+        } else if (JSON.stringify(archiv[index.get(key)].entries) !== JSON.stringify(entries)) {
+          archiv[index.get(key)].entries = entries;
+          changed = true;
+        }
+      });
+      if (changed) {
+        archiv.sort((a, b) => new Date(a.start) - new Date(b.start));
+        fbArchiveWrite();
+      }
+    }
+    function fbArchiveShifts() {
+      return fbArchiveRead().map(a => ({ entries: a.entries, end: a.entries[a.entries.length - 1] }));
+    }
+    function fbArchiveClear() {
+      if (!confirm('Wirklich die gesicherten Fahrten für die Strecken-Abfrage löschen?\n\nDie Fahrten im Fahrtenbuch und die angelegten Strecken mit ihrer Statistik bleiben erhalten. Fahrten, die noch im Fahrtenbuch stehen, werden danach automatisch wieder gesichert. Willst du wirklich alles loswerden, lösche zuerst „Alle Fahrten" im Fahrtenbuch.')) return;
+      fbArchiveCache = [];
+      fbArchiveWrite();
+      fbRender();
+      alert('Erledigt.');
     }
 
     function fbFormatTime(iso) {
@@ -2572,7 +2657,7 @@
     // wird, egal wie oft fbSyncRoutes() aufgerufen wird.
     function fbSyncRoutes() {
       if (fbRoutes.length === 0) return;
-      const shifts = fbBuildShifts();
+      const shifts = fbArchiveShifts(); // Schattenkopie (siehe oben), enthält alle abgeschlossenen Fahrten
       let changed = false;
       fbRoutes.forEach(route => {
         shifts.forEach(shift => {
@@ -2835,6 +2920,159 @@
       }).join('');
     }
 
+    // ===== Strecken-Abfrage: Von/Bis wählen, Ergebnis sofort aus dem Archiv =====
+    let fbQueryVon = null;   // {code, name}
+    let fbQueryBis = null;
+    let fbQueryStage = null; // 'von' | 'bis'
+
+    // Alle Orte aus den gesicherten Fahrten, häufigste zuerst.
+    function fbArchiveOrte() {
+      const map = new Map();
+      fbArchiveRead().forEach(a => a.entries.forEach(e => {
+        const o = map.get(e.ort.code) || { code: e.ort.code, name: e.ort.name, n: 0 };
+        o.n++;
+        map.set(e.ort.code, o);
+      }));
+      return [...map.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'de'));
+    }
+
+    // Gleiche Logik wie fbSyncRoutes(), aber ohne etwas zu speichern.
+    function fbFindFahrten(von, bis) {
+      const out = [];
+      fbArchiveShifts().forEach(shift => {
+        const entries = shift.entries;
+        let i = 0;
+        while (i < entries.length) {
+          if ((entries[i].type !== 'start' && entries[i].type !== 'durch') || entries[i].ort.code !== von) { i++; continue; }
+          let found = -1;
+          for (let j = i + 1; j < entries.length; j++) {
+            if ((entries[j].type === 'stopp' || entries[j].type === 'ende' || entries[j].type === 'durch') && entries[j].ort.code === bis) { found = j; break; }
+          }
+          if (found === -1) { i++; continue; }
+          let fahrzeitMs = 0;
+          for (let k = i; k < found; k++) {
+            if (entries[k].type === 'stopp') continue; // Standzeit nicht zählen
+            fahrzeitMs += new Date(entries[k + 1].time) - new Date(entries[k].time);
+          }
+          out.push({ fahrzeitMs, datum: entries[i].time });
+          i = found + 1;
+        }
+      });
+      return out;
+    }
+
+    function fbQueryRender() {
+      const vonBtn = document.getElementById('fb-query-von');
+      const bisBtn = document.getElementById('fb-query-bis');
+      const resEl = document.getElementById('fb-query-result');
+      if (!vonBtn || !bisBtn || !resEl) return;
+      vonBtn.textContent = fbQueryVon ? fbQueryVon.name : 'Von wählen';
+      bisBtn.textContent = fbQueryBis ? fbQueryBis.name : 'Bis wählen';
+
+      if (fbArchiveRead().length === 0) {
+        resEl.innerHTML = '<div class="fb-shift-entry-detail">Noch keine abgeschlossene Fahrt vorhanden. Sobald du eine Fahrt beendet hast, kannst du hier jede Teilstrecke daraus abfragen.</div>';
+        return;
+      }
+      if (!fbQueryVon || !fbQueryBis) {
+        resEl.innerHTML = '<div class="fb-shift-entry-detail">Wähle Von und Bis aus den Orten deiner Fahrten. Das Ergebnis erscheint sofort, ohne dass du die Strecke vorher anlegen musst.</div>';
+        return;
+      }
+      if (fbQueryVon.code === fbQueryBis.code) {
+        resEl.innerHTML = '<div class="fb-shift-entry-detail">Von und Bis sind derselbe Ort.</div>';
+        return;
+      }
+      const fahrten = fbFindFahrten(fbQueryVon.code, fbQueryBis.code);
+      if (fahrten.length === 0) {
+        resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Fahrt von ${bstEscapeHtml(fbQueryVon.name)} nach ${bstEscapeHtml(fbQueryBis.name)} in deinen Fahrten gefunden.</div>`;
+        return;
+      }
+      const avgMs = fahrten.reduce((s, f) => s + f.fahrzeitMs, 0) / fahrten.length;
+      const minMs = Math.min(...fahrten.map(f => f.fahrzeitMs));
+      const maxMs = Math.max(...fahrten.map(f => f.fahrzeitMs));
+      const schonGespeichert = fbRoutes.some(r => r.von === fbQueryVon.code && r.bis === fbQueryBis.code);
+      resEl.innerHTML = `
+        <div class="fb-route-search-summary">
+          Ø Fahrzeit ${fbFormatDuration(avgMs)}<br>
+          Min ${fbFormatDuration(minMs)} · Max ${fbFormatDuration(maxMs)} (${fahrten.length} Fahrt${fahrten.length === 1 ? '' : 'en'})
+        </div>
+        ${schonGespeichert
+          ? '<div class="fb-shift-entry-detail" style="margin-top: 8px;">Diese Strecke ist schon in deiner Liste gespeichert.</div>'
+          : '<button class="btn-add" style="margin-top: 10px;" onclick="fbQuerySave()">Als Strecke speichern</button>'}
+      `;
+    }
+
+    function fbQueryPick(stage) {
+      fbQueryStage = stage;
+      document.getElementById('fb-main').style.display = 'none';
+      document.getElementById('fb-query-picker').style.display = 'block';
+      document.getElementById('fb-query-picker-title').textContent = stage === 'von' ? 'Von wählen' : 'Bis wählen';
+      document.getElementById('fb-query-picker-search').value = '';
+      fbQueryPickerRender();
+      window.scrollTo(0, 0);
+    }
+
+    function fbQueryPickerClose() {
+      document.getElementById('fb-main').style.display = 'block';
+      document.getElementById('fb-query-picker').style.display = 'none';
+      fbQueryStage = null;
+    }
+
+    let fbQueryPickerRows = [];
+    function fbQueryPickerRender() {
+      const q = document.getElementById('fb-query-picker-search').value.trim().toLowerCase();
+      const listEl = document.getElementById('fb-query-picker-list');
+      let orte = fbArchiveOrte();
+      if (q) {
+        const rank = o => {
+          const code = o.code.toLowerCase(), name = o.name.toLowerCase();
+          if (code === q) return 0;
+          if (code.startsWith(q)) return 1;
+          if (name.startsWith(q)) return 2;
+          return 3;
+        };
+        orte = orte.filter(o => o.code.toLowerCase().includes(q) || o.name.toLowerCase().includes(q))
+                   .sort((a, b) => rank(a) - rank(b));
+      }
+      fbQueryPickerRows = orte.slice(0, 60);
+      if (fbQueryPickerRows.length === 0) {
+        listEl.innerHTML = '<div class="bst-empty">Keine passenden Orte in deinen Fahrten.</div>';
+        return;
+      }
+      listEl.innerHTML = fbQueryPickerRows.map((o, i) => `
+        <div class="bst-item" style="cursor: pointer;" onclick="fbQueryPickerSelect(${i})">
+          <div class="bst-item-top">
+            <span class="bst-code">${bstEscapeHtml(o.code)}</span>
+            <span class="bst-item-right"><span class="bst-kat">${o.n}×</span></span>
+          </div>
+          <div class="bst-name">${bstEscapeHtml(o.name)}</div>
+        </div>
+      `).join('');
+    }
+
+    function fbQueryPickerSelect(i) {
+      const o = fbQueryPickerRows[i];
+      if (!o) return;
+      if (fbQueryStage === 'von') fbQueryVon = { code: o.code, name: o.name };
+      else fbQueryBis = { code: o.code, name: o.name };
+      fbQueryPickerClose();
+      fbQueryRender();
+    }
+
+    function fbQuerySwap() {
+      const t = fbQueryVon; fbQueryVon = fbQueryBis; fbQueryBis = t;
+      fbQueryRender();
+    }
+
+    function fbQuerySave() {
+      if (!fbQueryVon || !fbQueryBis) return;
+      if (!fbRoutes.some(r => r.von === fbQueryVon.code && r.bis === fbQueryBis.code)) {
+        fbRoutes.push({ von: fbQueryVon.code, vonName: fbQueryVon.name, bis: fbQueryBis.code, bisName: fbQueryBis.name, fahrten: [] });
+        fbSaveRoutes();
+      }
+      fbRenderRoutes(); // trägt die Fahrten aus dem Archiv nach
+      fbQueryRender();
+    }
+
     function fbRoutePickerSelect(i) {
       const row = fbRoutePickerRows[i];
       if (!row) return;
@@ -2934,6 +3172,23 @@
       const shift = shifts[shifts.length - 1];
       if (!shift) return;
 
+      // Abgeschlossene Fahrt: alte Kopie im Archiv und alte Strecken-Einträge
+      // verwerfen — fbRender() legt sie gleich mit den neuen Zeiten wieder an.
+      if (shift.end) {
+        const alteZeiten = new Set(shift.entries.map(e => e.time));
+        const alterStart = shift.entries[0].time;
+        fbArchiveRead();
+        fbArchiveCache = fbArchiveCache.filter(a => a.start !== alterStart);
+        fbArchiveWrite();
+        let routesChanged = false;
+        fbRoutes.forEach(route => {
+          const vorher = route.fahrten.length;
+          route.fahrten = route.fahrten.filter(f => !alteZeiten.has(f.datum));
+          if (route.fahrten.length !== vorher) routesChanged = true;
+        });
+        if (routesChanged) fbSaveRoutes();
+      }
+
       shift.entries.forEach((entry, i) => {
         const val = document.getElementById(`fb-edit-time-${i}`).value; // "HH:MM"
         if (!val) return;
@@ -2951,7 +3206,9 @@
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       fbUpdateBadge();
+      fbArchiveSync();
       fbRenderRoutes();
+      fbQueryRender();
       const status = fbCurrentStatus();
       const singleRow = document.getElementById('fb-btn-row-single');
       const doubleRow = document.getElementById('fb-btn-row-double');
@@ -3251,7 +3508,7 @@
     }
 
     function fbResetLog() {
-      if (!confirm('Wirklich ALLE Fahrten (aktuelle und frühere) komplett löschen? Die Strecken-Statistik (Ø/Min/Max) bleibt davon unberührt erhalten.')) return;
+      if (!confirm('Wirklich ALLE Fahrten (aktuelle und frühere) aus dem Fahrtenbuch löschen? Die angelegten Strecken mit ihrer Statistik und die Daten für die Strecken-Abfrage bleiben erhalten.')) return;
       fbLog = [];
       fbSave();
       fbRender();
