@@ -1350,10 +1350,7 @@
               <button class="btn-add" style="flex: 0 0 auto; width: auto; margin: 0; padding: 10px 14px;" onclick="fbQuerySwap()" title="Richtung tauschen" aria-label="Richtung tauschen">⇄</button>
               <button id="fb-query-bis" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('bis')">Bis wählen</button>
             </div>
-            <div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px;">
-              <button id="fb-query-via" class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('via')">Über (optional)</button>
-              <button id="fb-query-via-clear" class="btn-add" style="flex: 0 0 auto; width: auto; margin: 0; padding: 10px 14px; display: none;" onclick="fbQueryClearVia()" title="Über entfernen" aria-label="Über entfernen">✕</button>
-            </div>
+            <div id="fb-query-via-rows"></div>
             <div id="fb-query-result"></div>
           </div>
           <div class="fb-footer-actions" style="margin-top: 0; margin-bottom: 16px;">
@@ -2927,8 +2924,10 @@
     // ===== Strecken-Abfrage: Von/Bis wählen, Ergebnis sofort aus dem Archiv =====
     let fbQueryVon = null;   // {code, name}
     let fbQueryBis = null;
-    let fbQueryVia = null;   // optionaler Ort dazwischen
-    let fbQueryStage = null; // 'von' | 'bis' | 'via'
+    let fbQueryVias = [null]; // bis zu 3 optionale Orte dazwischen (null = Zeile noch leer)
+    let fbQueryViaIdx = 0;    // welche Über-Zeile gerade im Auswahlfenster bearbeitet wird
+    let fbQueryStage = null;  // 'von' | 'bis' | 'via'
+    const FB_QUERY_VIA_MAX = 3;
 
     // Alle Orte aus den gesicherten Fahrten, häufigste zuerst.
     function fbArchiveOrte() {
@@ -3053,10 +3052,21 @@
       if (!vonBtn || !bisBtn || !resEl) return;
       vonBtn.textContent = fbQueryVon ? fbQueryVon.name : 'Von wählen';
       bisBtn.textContent = fbQueryBis ? fbQueryBis.name : 'Bis wählen';
-      const viaBtn = document.getElementById('fb-query-via');
-      const viaClear = document.getElementById('fb-query-via-clear');
-      if (viaBtn) viaBtn.textContent = fbQueryVia ? 'Über ' + fbQueryVia.name : 'Über (optional)';
-      if (viaClear) viaClear.style.display = fbQueryVia ? 'block' : 'none';
+      const viaRows = document.getElementById('fb-query-via-rows');
+      if (viaRows) {
+        const last = fbQueryVias.length - 1;
+        viaRows.innerHTML = fbQueryVias.map((v, i) => {
+          const label = v ? 'Über ' + bstEscapeHtml(v.name) : (i === 0 ? 'Über (optional)' : 'Über');
+          const canAdd = i === last && fbQueryVias.length < FB_QUERY_VIA_MAX;
+          const side = canAdd
+            ? `<button class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; padding: 10px 0; min-width: 0;" onclick="fbQueryAddVia()" title="Weiteren Ort hinzufügen" aria-label="Weiteren Ort hinzufügen">+</button>`
+            : `<button class="btn-add" style="flex: 1 1 0; width: auto; margin: 0; padding: 10px 0; min-width: 0;" onclick="fbQueryRemoveVia(${i})" title="Entfernen" aria-label="Über entfernen">✕</button>`;
+          return `<div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px;">
+            <button class="btn-add" style="flex: 4 1 0; width: auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="fbQueryPick('via', ${i})">${label}</button>
+            ${(i === 0 && !v && !canAdd) ? '' : side}
+          </div>`;
+        }).join('');
+      }
 
       if (fbArchiveRead().length === 0) {
         resEl.innerHTML = '<div class="fb-shift-entry-detail">Noch keine abgeschlossene Fahrt vorhanden. Sobald du eine Fahrt beendet hast, kannst du hier jede Teilstrecke daraus abfragen.</div>';
@@ -3070,26 +3080,30 @@
         resEl.innerHTML = '<div class="fb-shift-entry-detail">Von und Bis sind derselbe Ort.</div>';
         return;
       }
-      // Mit "Über": genau durch diesen Ort rechnen (Von -> Über + Über -> Bis).
-      if (fbQueryVia) {
-        if (fbQueryVia.code === fbQueryVon.code || fbQueryVia.code === fbQueryBis.code) {
-          resEl.innerHTML = '<div class="fb-shift-entry-detail">Der Ort bei „Über" muss zwischen Von und Bis liegen, nicht derselbe wie Von oder Bis.</div>';
+      // Mit "Über": genau durch diese Orte rechnen (Von -> Über1 -> Über2 -> ... -> Bis).
+      const vias = fbQueryVias.filter(Boolean);
+      if (vias.length) {
+        const wp = [fbQueryVon].concat(vias, [fbQueryBis]);
+        const codes = wp.map(w => w.code);
+        if (new Set(codes).size !== codes.length) {
+          resEl.innerHTML = '<div class="fb-shift-entry-detail">Jeder Ort darf nur einmal vorkommen: „Über" muss sich von Von, Bis und den anderen „Über"-Orten unterscheiden.</div>';
           return;
         }
         const data = fbLegStats();
-        // Der Weg darf keinen Ort zweimal berühren: die linke Hälfte nicht über "Bis",
-        // die rechte nicht über Orte der linken Hälfte (sonst Schleifen wie
-        // Wolfurt → Kufstein → Wolfurt → ...).
-        const links = fbComposeBest(fbQueryVon.code, fbQueryVia.code, data, [fbQueryBis.code]);
-        const linksOrte = new Set([fbQueryVon.code]);
-        if (links) links.legs.forEach(l => { linksOrte.add(l.von); linksOrte.add(l.bis); });
-        linksOrte.delete(fbQueryVia.code);
-        const rechts = links ? fbComposeBest(fbQueryVia.code, fbQueryBis.code, data, [...linksOrte]) : null;
-        if (!links || !rechts) {
-          resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Verbindung über ${bstEscapeHtml(fbQueryVia.name)} gefunden: ${!links ? bstEscapeHtml(fbQueryVon.name) + ' → ' + bstEscapeHtml(fbQueryVia.name) : bstEscapeHtml(fbQueryVia.name) + ' → ' + bstEscapeHtml(fbQueryBis.name)} kommt in deinen Fahrten nicht vor.</div>`;
-          return;
+        // Abschnitt für Abschnitt zusammensetzen. Der Weg darf keinen Ort zweimal
+        // berühren: nicht die übrigen Wegpunkte und nicht Orte früherer Abschnitte.
+        const legs = [];
+        const benutzt = new Set();
+        for (let k = 0; k < wp.length - 1; k++) {
+          const a = wp[k].code, b = wp[k + 1].code;
+          const meiden = codes.filter(c => c !== a && c !== b).concat([...benutzt].filter(c => c !== a));
+          const teil = fbComposeBest(a, b, data, meiden);
+          if (!teil) {
+            resEl.innerHTML = `<div class="fb-shift-entry-detail">Keine Verbindung gefunden: ${bstEscapeHtml(wp[k].name)} → ${bstEscapeHtml(wp[k + 1].name)} kommt in deinen Fahrten nicht vor.</div>`;
+            return;
+          }
+          teil.legs.forEach(l => { legs.push(l); benutzt.add(l.von); benutzt.add(l.bis); });
         }
-        const legs = links.legs.concat(rechts.legs);
         const avg = legs.reduce((x, l) => x + l.sum / l.n, 0);
         const mn = legs.reduce((x, l) => x + l.min, 0);
         const mx = legs.reduce((x, l) => x + l.max, 0);
@@ -3099,7 +3113,7 @@
             Ø Fahrzeit ${fbFormatDuration(avg)}<br>
             Min ${fbFormatDuration(mn)} · Max ${fbFormatDuration(mx)}
           </div>
-          <div class="fb-shift-entry-detail" style="margin-top: 8px;">Über ${bstEscapeHtml(fbQueryVia.name)}, aus Teilstücken zusammengefügt:</div>
+          <div class="fb-shift-entry-detail" style="margin-top: 8px;">Über ${vias.map(v => bstEscapeHtml(v.name)).join(', ')}, aus Teilstücken zusammengefügt:</div>
           ${legs.map(l => `<div class="fb-shift-entry-detail">${nm(l.von)} → ${nm(l.bis)}: Ø ${fbFormatDuration(l.sum / l.n)} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div>`).join('')}
         `;
         return;
@@ -3142,8 +3156,9 @@
       `;
     }
 
-    function fbQueryPick(stage) {
+    function fbQueryPick(stage, idx) {
       fbQueryStage = stage;
+      if (stage === 'via') fbQueryViaIdx = idx || 0;
       document.getElementById('fb-main').style.display = 'none';
       document.getElementById('fb-query-picker').style.display = 'block';
       document.getElementById('fb-query-picker-title').textContent = stage === 'von' ? 'Von wählen' : (stage === 'via' ? 'Über welchen Ort?' : 'Bis wählen');
@@ -3182,7 +3197,9 @@
         listEl.innerHTML = '<div class="bst-empty">Keine passenden Orte in deinen Fahrten.</div>';
         return;
       }
-      listEl.innerHTML = fbQueryPickerRows.map((o, i) => `
+      const clearRow = (fbQueryStage === 'via' && fbQueryVias[fbQueryViaIdx])
+        ? `<div class="bst-item" style="cursor: pointer;" onclick="fbQueryPickerClearSlot()"><div class="bst-name">✕ Auswahl entfernen (${bstEscapeHtml(fbQueryVias[fbQueryViaIdx].name)})</div></div>` : '';
+      listEl.innerHTML = clearRow + fbQueryPickerRows.map((o, i) => `
         <div class="bst-item" style="cursor: pointer;" onclick="fbQueryPickerSelect(${i})">
           <div class="bst-item-top">
             <span class="bst-code">${bstEscapeHtml(o.code)}</span>
@@ -3197,19 +3214,37 @@
       const o = fbQueryPickerRows[i];
       if (!o) return;
       if (fbQueryStage === 'von') fbQueryVon = { code: o.code, name: o.name };
-      else if (fbQueryStage === 'via') fbQueryVia = { code: o.code, name: o.name };
+      else if (fbQueryStage === 'via') fbQueryVias[fbQueryViaIdx] = { code: o.code, name: o.name };
       else fbQueryBis = { code: o.code, name: o.name };
       fbQueryPickerClose();
       fbQueryRender();
     }
 
-    function fbQueryClearVia() {
-      fbQueryVia = null;
+    // "+" : nächste Über-Zeile (höchstens 3). Ist die letzte Zeile noch leer, wird dort gewählt.
+    function fbQueryPickerClearSlot() {
+      fbQueryVias[fbQueryViaIdx] = null;
+      if (fbQueryVias.length > 1) fbQueryVias.splice(fbQueryViaIdx, 1);
+      fbQueryPickerClose();
+      fbQueryRender();
+    }
+
+    function fbQueryAddVia() {
+      const last = fbQueryVias.length - 1;
+      if (!fbQueryVias[last]) { fbQueryPick('via', last); return; }
+      if (fbQueryVias.length >= FB_QUERY_VIA_MAX) return;
+      fbQueryVias.push(null);
+      fbQueryRender();
+    }
+
+    function fbQueryRemoveVia(i) {
+      fbQueryVias.splice(i, 1);
+      if (fbQueryVias.length === 0) fbQueryVias = [null];
       fbQueryRender();
     }
 
     function fbQuerySwap() {
       const t = fbQueryVon; fbQueryVon = fbQueryBis; fbQueryBis = t;
+      fbQueryVias.reverse();
       fbQueryRender();
     }
 
