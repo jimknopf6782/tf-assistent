@@ -1045,6 +1045,8 @@
     <div>Bitte das Gerät ins Hochformat drehen.</div>
   </div>
 
+  <div id="gdrive-banner" onclick="gdriveBackup(true)" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: #c62828; color: #fff; text-align: center; padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">☁️ Sicherung ausstehend – hier tippen zum Sichern</div>
+
   <button id="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="Nach oben" aria-label="Nach oben">↑</button>
 
   <div id="app-root" class="container">
@@ -1752,6 +1754,7 @@
         }
         if (!res.ok) throw new Error('upload ' + res.status);
         localStorage.setItem('tfGdriveLast', new Date().toISOString());
+        localStorage.removeItem('tfGdriveDirty');
         gdriveNote = '';
       } catch (e) {
         gdriveNote = interactive
@@ -1841,7 +1844,36 @@
       await gdriveBackup(true);
     }
 
+    // Roter Hinweis oben: Sicherung ist eingeschaltet, aber es gibt Änderungen, die
+    // noch nicht in Google Drive sind. Ein Tipp darauf startet die Sicherung
+    // (Tipp = Geste, damit das Google-Fenster nicht blockiert wird).
+    function gdriveBannerUpdate() {
+      const el = document.getElementById('gdrive-banner');
+      if (!el) return;
+      let dirty = false;
+      try { dirty = gdriveEnabled() && localStorage.getItem('tfGdriveDirty') === '1'; } catch (e) {}
+      el.style.display = dirty ? 'block' : 'none';
+    }
+    // Einmalig beim Start: gibt es eine abgeschlossene Fahrt, die jünger ist als die
+    // letzte Sicherung (z. B. weil die automatische Sicherung nicht klappte)?
+    function gdriveCheckStale() {
+      try {
+        if (!gdriveEnabled() || localStorage.getItem('tfGdriveDirty') === '1') return;
+        const last = Date.parse(localStorage.getItem('tfGdriveLast') || '') || 0;
+        const arch = JSON.parse(localStorage.getItem('tfFahrtenbuchArchiv') || '[]');
+        const newest = arch.reduce((m, sh) => {
+          const e = (sh.entries || [])[(sh.entries || []).length - 1];
+          const t = e ? Date.parse(e.time) || 0 : 0;
+          return Math.max(m, t);
+        }, 0);
+        if (newest > last) localStorage.setItem('tfGdriveDirty', '1');
+      } catch (e) { /* egal */ }
+    }
+    document.addEventListener('DOMContentLoaded', () => { gdriveCheckStale(); gdriveBannerUpdate(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) gdriveBannerUpdate(); });
+
     function gdriveRenderStatus() {
+      gdriveBannerUpdate();
       const on = gdriveEnabled();
       const statusEl = document.getElementById('gdrive-status');
       if (!statusEl) return;
@@ -2470,6 +2502,9 @@
     function fbSave() {
       try {
         localStorage.setItem(FB_STORAGE_KEY, JSON.stringify(fbLog));
+        // Abgeschlossene Fahrt(en) geändert -> Sicherung in Google Drive nötig.
+        const lastE = fbLog[fbLog.length - 1];
+        if (!lastE || lastE.type === 'ende') localStorage.setItem('tfGdriveDirty', '1');
       } catch (e) {
         console.log('Fahrtenbuch: Speichern fehlgeschlagen', e);
       }
