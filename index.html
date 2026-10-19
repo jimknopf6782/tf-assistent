@@ -3149,7 +3149,7 @@
             Min ${fbFormatDuration(mn)} · Max ${fbFormatDuration(mx)}
           </div>
           <div class="fb-shift-entry-detail" style="margin-top: 8px;">Über ${vias.map(v => bstEscapeHtml(v.name)).join(', ')}, aus Teilstücken zusammengefügt:</div>
-          ${legs.map(l => `<div class="fb-shift-entry-detail">${nm(l.von)} → ${nm(l.bis)}: Ø ${fbFormatDuration(l.sum / l.n)}${l.n > 1 ? ' · Min ' + fbFormatDuration(l.min) + ' · Max ' + fbFormatDuration(l.max) : ''} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div>`).join('')}
+          ${legs.map(l => `<div class="fb-shift-entry-detail" style="margin-top: 8px;"><div style="font-weight: 600;">${nm(l.von)} → ${nm(l.bis)}</div><div>Ø ${fbFormatDuration(l.sum / l.n)}${l.n > 1 ? ' · Min ' + fbFormatDuration(l.min) + ' · Max ' + fbFormatDuration(l.max) : ''} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div></div>`).join('')}
         `;
         return;
       }
@@ -3172,7 +3172,7 @@
             Min ${fbFormatDuration(mn)} · Max ${fbFormatDuration(mx)}
           </div>
           <div class="fb-shift-entry-detail" style="margin-top: 8px;">Aus Teilstücken zusammengefügt:</div>
-          ${comp.legs.map(l => `<div class="fb-shift-entry-detail">${nm(l.von)} → ${nm(l.bis)}: Ø ${fbFormatDuration(l.sum / l.n)}${l.n > 1 ? ' · Min ' + fbFormatDuration(l.min) + ' · Max ' + fbFormatDuration(l.max) : ''} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div>`).join('')}
+          ${comp.legs.map(l => `<div class="fb-shift-entry-detail" style="margin-top: 8px;"><div style="font-weight: 600;">${nm(l.von)} → ${nm(l.bis)}</div><div>Ø ${fbFormatDuration(l.sum / l.n)}${l.n > 1 ? ' · Min ' + fbFormatDuration(l.min) + ' · Max ' + fbFormatDuration(l.max) : ''} (${l.n} Fahrt${l.n === 1 ? '' : 'en'})</div></div>`).join('')}
         `;
         return;
       }
