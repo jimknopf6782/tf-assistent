@@ -2924,7 +2924,7 @@
     // Link zum Bahnhofsplan (DB InfraGO, über trassenfinder.de) — nur für deutsche Betriebsstellen.
     function bstPlanLink(code, land) {
       if (land !== 'DE' || !code) return '';
-      return `<a class="btn-add" style="display: block; width: auto; margin: 8px 0 0; padding: 8px 12px; text-align: center; text-decoration: none; font-size: 0.9rem;" href="https://trassenfinder.de/apn/${encodeURIComponent(String(code).trim())}" target="_blank" rel="noopener noreferrer">🛤️ Bahnhofsplan anzeigen</a>`;
+      return `<a class="btn-add" style="display: block; width: auto; margin: 8px 0 0; padding: 8px 12px; text-align: center; text-decoration: none; font-size: 0.9rem;" href="https://trassenfinder.de/apn/${encodeURIComponent(String(code).trim())}" target="_blank" rel="noopener noreferrer">Bahnhofsplan anzeigen</a>`;
     }
 
     function bstSearchRanked(q) {
