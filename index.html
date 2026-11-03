@@ -2414,6 +2414,7 @@
                 </div>
                 <div class="bst-name">${bstEscapeHtml(name)} · <span class="bst-distance">${bstFormatDistance(dist)}</span></div>
                 ${statusBadge}
+                ${bstPlanLink(code, land)}
               </div>
             `;
           }).join('');
@@ -2920,6 +2921,12 @@
     // 3. Name beginnt mit, 4. alles andere, was den Suchbegriff enthält.
     // Sortiert VOR dem Abschneiden der Trefferliste, sonst fehlt der exakte
     // Treffer, wenn es viele Teiltreffer gibt. Array.sort ist stabil.
+    // Link zum Bahnhofsplan (DB InfraGO, über trassenfinder.de) — nur für deutsche Betriebsstellen.
+    function bstPlanLink(code, land) {
+      if (land !== 'DE' || !code) return '';
+      return `<a class="btn-add" style="display: block; width: auto; margin: 8px 0 0; padding: 8px 12px; text-align: center; text-decoration: none; font-size: 0.9rem;" href="https://trassenfinder.de/apn/${encodeURIComponent(String(code).trim())}" target="_blank" rel="noopener noreferrer">🛤️ Bahnhofsplan anzeigen</a>`;
+    }
+
     function bstSearchRanked(q) {
       const scored = [];
       for (const row of bstData) {
@@ -3917,6 +3924,7 @@
               </div>
               <div class="bst-name">${bstEscapeHtml(name)}</div>
               ${statusBadge}
+              ${bstPlanLink(code, land)}
             </div>
           `;
         }).join('');
