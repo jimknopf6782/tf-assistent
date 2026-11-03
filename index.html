@@ -3436,6 +3436,39 @@
       fbRender();
     }
 
+    // Laufende Zeiten der aktuellen Fahrt: der gerade laufende Abschnitt (seit dem
+    // letzten Eintrag bis jetzt) zählt live mit — als Fahrzeit, solange man fährt,
+    // als Standzeit, solange man steht.
+    function fbLiveTotals(shift) {
+      let f = shift.fahrzeitMs, st = shift.stehzeitMs;
+      if (shift.open) {
+        const last = shift.entries[shift.entries.length - 1];
+        const d = Math.max(0, Date.now() - new Date(last.time).getTime());
+        if (last.type === 'stopp') st += d; else f += d;
+      }
+      return { f, st };
+    }
+
+    function fbLiveTick() {
+      const gEl = document.getElementById('fb-gesamtzeit');
+      const tEl = document.getElementById('fb-totals');
+      if (!gEl || !tEl || fbLog.length === 0) return;
+      const shifts = fbBuildShifts();
+      const sh = shifts[shifts.length - 1];
+      if (!sh || !(sh.open || sh.segments.length)) return;
+      const { f, st } = fbLiveTotals(sh);
+      gEl.textContent = fbFormatDuration(f + st);
+      tEl.textContent = `Fahrzeit ${fbFormatDuration(f)} · Standzeit ${fbFormatDuration(st)}`;
+    }
+    setInterval(() => {
+      if (document.hidden || fbLog.length === 0) return;
+      if (fbLog[fbLog.length - 1].type === 'ende') return;
+      fbLiveTick();
+    }, 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && fbLog.length && fbLog[fbLog.length - 1].type !== 'ende') fbLiveTick();
+    });
+
     function fbRender() {
       if (fbLog.length === 0) fbLoad();
       fbUpdateBadge();
@@ -3501,19 +3534,18 @@
         (currentShift && currentShift.entries.length > 1) ? 'block' : 'none';
       document.getElementById('fb-collapse-link').style.display =
         (currentShift && !currentShift.open) ? 'inline' : 'none';
-      if (!currentShift || currentShift.segments.length === 0) {
+      if (!currentShift || (currentShift.segments.length === 0 && !currentShift.open)) {
         logEl.innerHTML = '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
         document.getElementById('fb-totals').textContent = '';
         document.getElementById('fb-gesamtzeit').textContent = '';
         routeEl.textContent = '';
       } else {
-        document.getElementById('fb-gesamtzeit').textContent =
-          fbFormatDuration(currentShift.fahrzeitMs + currentShift.stehzeitMs);
-        document.getElementById('fb-totals').textContent =
-          `Fahrzeit ${fbFormatDuration(currentShift.fahrzeitMs)} · Standzeit ${fbFormatDuration(currentShift.stehzeitMs)}`;
+        fbLiveTick();
         const lastEntry = currentShift.entries[currentShift.entries.length - 1];
         routeEl.textContent = `${currentShift.start.ort.name} → ${lastEntry.ort.name}`;
-        logEl.innerHTML = fbRenderSegmentList(currentShift.segments);
+        logEl.innerHTML = currentShift.segments.length
+          ? fbRenderSegmentList(currentShift.segments)
+          : '<div class="bst-empty">Noch keine abgeschlossenen Abschnitte.</div>';
       }
 
       const olderWrap = document.getElementById('fb-older-wrap');
