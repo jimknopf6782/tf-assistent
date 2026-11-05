@@ -1382,15 +1382,14 @@
         </div>
         <input type="file" id="app-import-file" accept=".json,application/json" style="display: none;" onchange="appImportFile(event)">
 
-        <div class="fb-log-header" style="margin-top: 26px;"><span>Automatische Sicherung</span></div>
+        <div class="fb-log-header" style="margin-top: 26px;"><span>Sicherung in Google Drive</span></div>
         <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
           Deine Fahrten und Strecken werden in deinem eigenen Google Drive gesichert.
         </div>
         <div id="gdrive-status" class="fb-shift-entry-detail" style="margin-bottom: 10px; display: none;"></div>
         <div class="fb-footer-actions">
-          <button id="gdrive-btn-toggle" class="btn-add" onclick="gdriveToggle()">☁️ Sicherung in Google Drive einschalten</button>
-          <button id="gdrive-btn-now" class="btn-add" style="display: none;" onclick="gdriveBackup(true)">🔄 Jetzt sichern</button>
-          <button id="gdrive-btn-restore" class="btn-add" style="display: none;" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
+          <button id="gdrive-btn-now" class="btn-add" onclick="gdriveManual()">☁️ In Google Drive sichern</button>
+          <button id="gdrive-btn-restore" class="btn-add" onclick="gdriveRestore()">📥 Aus Google Drive wiederherstellen</button>
         </div>
         <div class="fb-log-header" style="margin-top: 26px;"><span>Strecken-Abfrage</span></div>
         <div class="fb-shift-entry-detail" style="margin-bottom: 14px;">
@@ -1767,7 +1766,6 @@
     }
 
     async function gdriveRestore() {
-      if (!gdriveEnabled()) return;
       try {
         const token = await gdriveGetToken(true);
         const id = await gdriveFindFile(token);
@@ -1779,6 +1777,10 @@
         const anzahl = Object.keys(parsed.data).length;
         const datumText = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('de-DE') : 'unbekannt';
         if (!confirm(`Wirklich ALLE aktuellen Daten auf diesem Gerät durch die Sicherung vom ${datumText} ersetzen (${anzahl} gespeicherte Eintr${anzahl === 1 ? 'ag' : 'äge'})? Das kann nicht rückgängig gemacht werden.`)) return;
+        localStorage.setItem('tfGdriveEnabled', '1');
+        localStorage.setItem('tfGdriveFileId', id);
+        localStorage.setItem('tfGdriveLast', new Date().toISOString());
+        localStorage.removeItem('tfGdriveDirty');
         appClearKeepingDevice();
         Object.keys(parsed.data).forEach(key => localStorage.setItem(key, parsed.data[key]));
         alert('Wiederherstellung abgeschlossen. Die App wird jetzt neu geladen.');
@@ -1788,14 +1790,14 @@
       }
     }
 
-    async function gdriveToggle() {
-      if (gdriveEnabled()) {
-        if (!confirm('Automatische Sicherung ausschalten? Die bereits gesicherte Datei bleibt in deinem Google Drive.')) return;
-        localStorage.removeItem('tfGdriveEnabled');
-        gdriveNote = '';
-        gdriveRenderStatus();
-        return;
-      }
+    // Knopf "In Google Drive sichern": beim ersten Mal erst Anmeldung und Schutzabfrage
+    // (gdriveEnable), danach direkt sichern.
+    function gdriveManual() {
+      if (gdriveEnabled()) return gdriveBackup(true);
+      return gdriveEnable();
+    }
+
+    async function gdriveEnable() {
       if (!gdriveConfigured()) {
         alert('Der Google-Zugang ist in dieser Version noch nicht eingerichtet.');
         return;
@@ -1828,7 +1830,7 @@
               return;
             }
             if (!confirm('Sicherung in Google Drive mit den Daten dieses Geräts überschreiben?')) {
-              gdriveNote = 'Sicherung wurde nicht eingeschaltet.';
+              gdriveNote = 'Sicherung wurde abgebrochen.';
               gdriveRenderStatus();
               return;
             }
@@ -1877,15 +1879,11 @@
       const on = gdriveEnabled();
       const statusEl = document.getElementById('gdrive-status');
       if (!statusEl) return;
-      document.getElementById('gdrive-btn-toggle').textContent =
-        on ? '☁️ Sicherung ausschalten' : '☁️ Sicherung in Google Drive einschalten';
-      document.getElementById('gdrive-btn-now').style.display = on ? '' : 'none';
-      document.getElementById('gdrive-btn-restore').style.display = on ? '' : 'none';
       const last = localStorage.getItem('tfGdriveLast');
       let text = '';
       if (on) {
-        text = last ? 'Eingeschaltet · Letzte Sicherung: ' + new Date(last).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-                    : 'Eingeschaltet · Noch keine Sicherung';
+        text = last ? 'Letzte Sicherung: ' + new Date(last).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : 'Noch keine Sicherung.';
       }
       if (gdriveNote) text = text ? text + '\n' + gdriveNote : gdriveNote;
       statusEl.style.whiteSpace = 'pre-line';
@@ -3594,9 +3592,8 @@
         fbLog.push({ type: 'ende', time: last.time, ort: last.ort });
         fbSave();
         fbRender();
-        // Nach einer beendeten Fahrt automatisch sichern (Strecken sind nach fbRender() aktuell).
-        // Kurze Verzögerung, aber noch innerhalb der Tipp-Geste, damit eine nötige Google-Anmeldung nicht blockiert wird.
-        if (gdriveEnabled()) setTimeout(() => gdriveBackup(false), 300);
+        // Nach einer beendeten Fahrt: roter Hinweis oben, falls die Sicherung eingerichtet ist.
+        gdriveBannerUpdate();
         return;
       }
       // 'weiterfahrt': normalerweise fährst du vom selben Ort weiter, an dem du
